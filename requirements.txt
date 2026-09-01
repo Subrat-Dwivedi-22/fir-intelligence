@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pymongo
+pydantic
+pydantic-settings
+python-dotenv
+boto3
+python-multipart
+google-genai==2.20.0

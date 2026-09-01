@@ -1,0 +1,20 @@
+FROM public.ecr.aws/lambda/python:3.12
+
+WORKDIR ${LAMBDA_TASK_ROOT}
+
+RUN dnf install -y \
+    mesa-libGL \
+    libXext \
+    libXrender \
+    libSM \
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
+
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app ./app
+COPY worker ./worker
+
+CMD ["worker.lambda_handler.handler"]
