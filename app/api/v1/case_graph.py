@@ -146,7 +146,7 @@ def get_case_graph(case_id: str):
         nodes.append({
             "id": person["person_id"],
             "type": "PERSON",
-            "label": person.get("name"),
+            "label": person.get("name") or "Unknown Person",
             "roles": person.get("roles", []),
         })
 
@@ -154,7 +154,7 @@ def get_case_graph(case_id: str):
         nodes.append({
             "id": unknown["unknown_id"],
             "type": "UNKNOWN",
-            "label": unknown.get("label"),
+            "label": unknown.get("label") or unknown["unknown_id"],
             "roles": unknown.get("roles", []),
         })
 
@@ -162,7 +162,7 @@ def get_case_graph(case_id: str):
         nodes.append({
             "id": incident["incident_id"],
             "type": "INCIDENT",
-            "label": incident.get("title"),
+            "label": incident.get("title") or "Incident",
         })
 
     for entity in entities:
@@ -170,7 +170,7 @@ def get_case_graph(case_id: str):
             "id": entity["entity_id"],
             "type": "ENTITY",
             "entity_type": entity.get("type"),
-            "label": entity.get("value"),
+            "label": entity.get("value") or entity.get("type") or "Entity",
         })
 
     edges = []
