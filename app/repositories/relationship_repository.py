@@ -182,3 +182,25 @@ class RelationshipRepository:
                 },
             )
         )
+
+    def create_manual(
+        self,
+        case_id: str,
+        from_type: str,
+        from_id: str,
+        to_type: str,
+        to_id: str,
+        relationship_type: str,
+        evidence: str,
+    ) -> dict:
+        return self.create(
+            from_type=from_type,
+            from_id=from_id,
+            to_type=to_type,
+            to_id=to_id,
+            relationship_type=relationship_type,
+            case_id=case_id,
+            incident_id=None,
+            document_id=None,
+            evidence=evidence,
+        )    

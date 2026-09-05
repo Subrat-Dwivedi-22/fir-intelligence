@@ -10,6 +10,9 @@ from app.api.v1.jobs import router as jobs_router
 from app.api.v1.case_documents import (
     router as case_documents_router,
 )
+from app.api.v1.timeline import router as timeline_router
+from app.api.v1.relationships import router as relationships_router
+from app.api.v1.activity import router as activity_router
 
 app = FastAPI(
     title="FIR Intelligence Ingestion API",
@@ -57,3 +60,17 @@ app.include_router(
     prefix="/api/v1",
 )
 
+app.include_router(
+    timeline_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    relationships_router,
+    prefix="/api/v1",
+)
+
+app.include_router(
+    activity_router,
+    prefix="/api/v1",
+)
