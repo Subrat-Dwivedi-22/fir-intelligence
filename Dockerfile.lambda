@@ -7,12 +7,18 @@ RUN dnf install -y \
     libXext \
     libXrender \
     libSM \
+    libgomp \
     && dnf clean all \
     && rm -rf /var/cache/dnf
 
-COPY requirements.txt .
+ENV HOME=/tmp
+ENV TMPDIR=/tmp
+ENV PADDLE_HOME=/tmp/paddle
+ENV LD_LIBRARY_PATH=/usr/lib64:/usr/local/lib:/var/lang/lib/python3.12/site-packages/paddle/base:$LD_LIBRARY_PATH
 
-RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.lambda.txt .
+
+RUN pip install --no-cache-dir -r requirements.lambda.txt
 
 COPY app ./app
 COPY worker ./worker

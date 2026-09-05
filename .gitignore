@@ -3,3 +3,8 @@
 __pycache__/
 .pytest_cache/
 *.pyc
+# Terraform
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.*
+infrastructure/terraform/tfplan

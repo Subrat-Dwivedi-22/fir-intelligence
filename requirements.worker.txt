@@ -1,0 +1,11 @@
+pymongo
+pydantic
+pydantic-settings
+python-dotenv
+boto3
+google-genai==2.20.0
+
+paddleocr==3.7.0
+paddlepaddle==3.3.1
+paddlex==3.7.2
+pymupdf==1.28.2

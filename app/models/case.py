@@ -5,6 +5,9 @@ from datetime import datetime, timezone
 def create_case_document(
     case_number: str,
     title: str,
+    case_type: str,
+    priority: str,
+    synopsis: str | None = None,
     district: str | None = None,
     police_station: str | None = None,
 ):
@@ -19,6 +22,12 @@ def create_case_document(
 
         "title": title,
 
+        "case_type": case_type,
+
+        "priority": priority,
+
+        "synopsis": synopsis,
+
         "jurisdiction": {
             "state": None,
             "district": district,
@@ -31,7 +40,9 @@ def create_case_document(
 
         "legal_sections": [],
 
-        "status": "registered",
+        "status": "OPEN",
+
+        "closed_at": None,
 
         "incident_ids": [],
         "person_ids": [],

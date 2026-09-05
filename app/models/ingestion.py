@@ -21,7 +21,6 @@ def create_ingestion_job(
             "ocr": "PENDING",
             "segmentation": "PENDING",
             "extraction": "PENDING",
-            "llm_analysis": "PENDING",
             "entity_resolution": "PENDING",
             "persistence": "PENDING",
         },

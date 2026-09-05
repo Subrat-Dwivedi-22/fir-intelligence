@@ -8,8 +8,10 @@ from app.schemas.case import (
     CaseDetailResponse,
     CaseListItem,
     CaseSummaryResponse,
+    CaseStatus,
 )
 from app.api.serialization import serialize_mongo
+from datetime import datetime, timezone
 
 
 router = APIRouter(
@@ -44,6 +46,9 @@ def create_case(
     case = create_case_document(
         case_number=request.case_number,
         title=request.title,
+        case_type=request.case_type,
+        priority=request.priority.value,
+        synopsis=request.synopsis,
         police_station=request.police_station,
         district=request.district,
     )
@@ -54,6 +59,9 @@ def create_case(
         case_id=case["case_id"],
         case_number=case["case_number"],
         title=case["title"],
+        case_type=case["case_type"],
+        priority=case["priority"],
+        synopsis=case["synopsis"],
         status=case["status"],
     )
 
@@ -75,6 +83,9 @@ def list_cases():
             "case_id": 1,
             "case_number": 1,
             "title": 1,
+            "case_type": 1,
+            "priority": 1,
+            "synopsis": 1,
             "jurisdiction": 1,
             "status": 1,
             "created_at": 1,
@@ -113,6 +124,9 @@ def list_cases():
                 "created_at": case.get(
                     "created_at"
                 ),
+                "case_type": case.get("case_type"),
+                "priority": case.get("priority"),
+                "synopsis": case.get("synopsis"),
             }
         )
 
@@ -202,18 +216,13 @@ def get_case_summary(
 
     return CaseSummaryResponse(
         case_id=case_id,
-        case_number=case.get(
-            "case_number"
-        ),
-        title=case.get(
-            "title"
-        ),
-        police_station=jurisdiction.get(
-            "police_station"
-        ),
-        status=case.get(
-            "status"
-        ),
+        case_number=case.get("case_number"),
+        title=case.get("title"),
+        case_type=case.get("case_type"),
+        priority=case.get("priority"),
+        synopsis=case.get("synopsis"),
+        police_station=jurisdiction.get("police_station"),
+        status=case.get("status"),
         document_count=document_count,
         person_count=person_count,
         unknown_identity_count=unknown_identity_count,
@@ -222,6 +231,52 @@ def get_case_summary(
         relationship_count=relationship_count,
         analysis_available=analysis_available,
     )
+
+# ==========================================
+# CLOSE CASE
+# ==========================================
+
+@router.post(
+    "/{case_id}/close",
+    response_model=CaseDetailResponse,
+)
+def close_case(
+    case_id: str,
+):
+    now = datetime.now(timezone.utc)
+
+    case = db.cases.find_one(
+        {
+            "case_id": case_id,
+        },
+        {
+            "_id": 0,
+        },
+    )
+
+    if case is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Case not found.",
+        )
+
+    if case.get("status") == CaseStatus.CLOSED.value:
+        return get_case(case_id)
+
+    db.cases.update_one(
+        {
+            "case_id": case_id,
+        },
+        {
+            "$set": {
+                "status": CaseStatus.CLOSED.value,
+                "closed_at": now,
+                "updated_at": now,
+            }
+        },
+    )
+
+    return get_case(case_id)
 
 
 # ==========================================

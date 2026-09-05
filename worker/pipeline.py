@@ -7,6 +7,7 @@ from app.db.mongodb import db
 from app.repositories.document_repository import (
     DocumentRepository,
 )
+
 from app.repositories.section_repository import (
     SectionRepository,
 )
@@ -14,8 +15,9 @@ from app.repositories.section_repository import (
 from app.services.extraction.sections import (
     segment_fir,
 )
-from app.services.extraction.parser import (
-    parse_fir,
+
+from app.services.extraction.adapter import (
+    DocumentExtractionAdapter,
 )
 
 from app.services.ocr.factory import (
@@ -29,12 +31,15 @@ from app.services.llm.factory import (
 from app.services.identity.resolver import (
     PersonResolver,
 )
+
 from app.services.identity.case_linker import (
     CasePersonLinker,
 )
+
 from app.services.identity.unknown import (
     UnknownIdentityService,
 )
+
 from app.services.identity.case_unknown_linker import (
     CaseUnknownIdentityLinker,
 )
@@ -60,7 +65,7 @@ from app.repositories.relationship_repository import (
 
 class FIRPipeline:
     """
-    Main FIR ingestion pipeline.
+    Main FIR/document ingestion pipeline.
 
     Pipeline:
 
@@ -70,9 +75,9 @@ class FIRPipeline:
          ↓
         Segmentation
          ↓
-        Deterministic extraction
+        Gemini semantic document extraction
          ↓
-        Gemini analysis
+        Extraction adapter
          ↓
         Entity resolution
          ↓
@@ -82,23 +87,33 @@ class FIRPipeline:
          ↓
         Generic entity resolution
          ↓
+        Relationship resolution
+         ↓
         Relationship persistence
          ↓
         Completed job
 
-    Important architectural boundaries:
+    Architectural boundaries:
 
     - OCR is responsible for document text.
-    - deterministic extraction is responsible for structured FIR fields.
-    - Gemini is responsible for semantic incident analysis.
+    - Segmentation is retained for document structure/provenance,
+      but is NOT authoritative for extraction.
+    - Gemini is responsible for semantic document understanding.
+    - DocumentExtractionAdapter translates Gemini output into
+      existing application domain contracts.
     - PersonResolver is responsible for canonical person resolution.
     - UnknownIdentityService handles explicitly unidentified people.
     - Case linkers connect resolved entities to the case.
-    - MongoDB serialization happens only at the persistence boundary.
     - EntityResolver manages generic canonical entities.
-    - RelationshipResolver converts LLM relationship candidates
+    - RelationshipResolver converts semantic relationship candidates
       into canonical graph endpoints.
-    - RelationshipRepository persists graph relationships.
+    - Repositories handle MongoDB persistence.
+    - MongoDB serialization happens at the persistence boundary.
+
+    Important:
+
+    The worker deliberately re-raises processing exceptions so that
+    the SQS consumer can preserve retry semantics.
     """
 
     def __init__(self):
@@ -127,6 +142,10 @@ class FIRPipeline:
             get_llm_service()
         )
 
+        self.extraction_adapter = (
+            DocumentExtractionAdapter()
+        )
+
         # ==========================================
         # Identity services
         # ==========================================
@@ -147,8 +166,16 @@ class FIRPipeline:
             CaseUnknownIdentityLinker()
         )
 
+        # ==========================================
+        # Incident / relationship services
+        # ==========================================
+
         self.incident_repository = (
             IncidentRepository()
+        )
+
+        self.entity_resolver = (
+            EntityResolver()
         )
 
         self.relationship_resolver = (
@@ -171,7 +198,7 @@ class FIRPipeline:
         s3_key: str,
     ):
         """
-        Process one FIR document.
+        Process one document.
 
         The worker calls this method once for an SQS job.
 
@@ -230,12 +257,8 @@ class FIRPipeline:
             # 2. SEGMENTATION
             # ==========================================
 
-            # Segmentation is part of the extraction
-            # preparation stage. We do not create another
-            # ingestion model just for this step.
-
             self._update_step(
-            job_id,
+                job_id,
                 "segmentation",
                 "PROCESSING",
             )
@@ -243,6 +266,11 @@ class FIRPipeline:
             ocr_text = (
                 ocr_document.full_text
             )
+
+            if not ocr_text or not ocr_text.strip():
+                raise ValueError(
+                    "OCR produced no usable text"
+                )
 
             sections = segment_fir(
                 ocr_text
@@ -254,7 +282,7 @@ class FIRPipeline:
             )
 
             self._update_step(
-            job_id,
+                job_id,
                 "segmentation",
                 "COMPLETED",
             )
@@ -265,7 +293,7 @@ class FIRPipeline:
             )
 
             # ==========================================
-            # 3. DETERMINISTIC EXTRACTION
+            # 3. GEMINI DOCUMENT EXTRACTION
             # ==========================================
 
             self._update_step(
@@ -274,19 +302,29 @@ class FIRPipeline:
                 "PROCESSING",
             )
 
-            section_map = {
-                section.name: section.text
-                for section in sections
-            }
-
-            extracted = parse_fir(
-                section_map.get(
-                    "header",
-                    "",
-                ),
-                section_map,
+            # IMPORTANT:
+            #
+            # Gemini receives the complete OCR text.
+            #
+            # We deliberately do not feed only the
+            # segmented sections because arbitrary
+            # documents may not follow FIR structure.
+            document_extraction = (
+                self.llm_service.extract_document(
+                    text=ocr_text
+                )
             )
 
+            # Convert Gemini's universal extraction model
+            # into the existing domain models consumed by
+            # identity and incident services.
+            extracted = (
+                self.extraction_adapter.adapt(
+                    document_extraction
+                )
+            )
+
+            # Preserve the compatibility extraction record.
             self._store_extraction(
                 job_id=job_id,
                 case_id=case_id,
@@ -294,6 +332,14 @@ class FIRPipeline:
                 extracted=extracted,
             )
 
+            # Store the complete semantic extraction.
+            self._store_document_extraction(
+                job_id=job_id,
+                case_id=case_id,
+                document_id=document_id,
+                extraction=document_extraction,
+            )
+
             self._update_step(
                 job_id,
                 "extraction",
@@ -301,78 +347,46 @@ class FIRPipeline:
             )
 
             print(
-                "✓ Deterministic extraction completed"
-            )
-
-            # ==========================================
-            # 4. GEMINI ANALYSIS
-            # ==========================================
-
-            # Existing ingestion model calls this
-            # LLM analysis
-            # instead of inventing another step name.
-
-            self._update_step(
-                job_id,
-                "llm_analysis",
-                "PROCESSING",
-            )
-
-            narrative = (
-                section_map.get(
-                    "narrative",
-                    "",
-                )
-            )
-
-            known_persons = []
-
-            # ------------------------------------------
-            # Complainant
-            # ------------------------------------------
-
-            if extracted.complainant:
-
-                known_persons.append(
-                    extracted.complainant.name
-                )
-
-            # ------------------------------------------
-            # Accused
-            # ------------------------------------------
-
-            known_persons.extend(
-                person.name
-                for person in extracted.accused
-                if person.name
-            )
-
-            analysis = (
-                self.llm_service.analyze_incident(
-                    narrative=narrative,
-                    known_persons=known_persons,
-                )
-            )
-
-            self._store_llm_analysis(
-                job_id=job_id,
-                case_id=case_id,
-                document_id=document_id,
-                analysis=analysis,
-            )
-
-            self._update_step(
-                job_id,
-                "llm_analysis",
-                "COMPLETED",
+                "✓ Gemini document extraction completed"
             )
 
             print(
-                "✓ LLM analysis completed"
+                f"  Document type: "
+                f"{document_extraction.document_type}"
+            )
+
+            print(
+                f"  Persons: "
+                f"{len(document_extraction.persons)}"
+            )
+
+            print(
+                f"  Organizations: "
+                f"{len(document_extraction.organizations)}"
+            )
+
+            print(
+                f"  Locations: "
+                f"{len(document_extraction.locations)}"
+            )
+
+            print(
+                f"  Vehicles: "
+                f"{len(document_extraction.vehicles)}"
+            )
+
+            print(
+                f"  Evidence items: "
+                f"{len(document_extraction.evidence_items)}"
+            )
+
+            print(
+                f"  Relationships: "
+                f"{len(document_extraction.relationships)}"
             )
 
             # ==========================================
-            # 5. ENTITY RESOLUTION
+            # 4. ENTITY RESOLUTION
             # ==========================================
 
             self._update_step(
@@ -385,59 +399,52 @@ class FIRPipeline:
             resolved_unknowns = []
 
             # ==========================================
-            # 5A. COMPLAINANT
+            # 4A. PEOPLE
             # ==========================================
 
-            if extracted.complainant:
+            for person in (
+                document_extraction.persons
+            ):
 
-                complainant_result = (
-                    self.person_resolver.resolve(
-                        extracted.complainant
+                if (
+                    not person.name
+                    or not person.name.strip()
+                ):
+                    continue
+
+                role = (
+                    self._primary_person_role(
+                        person.roles
                     )
                 )
 
-                resolved_people.append(
-                    {
-                        "person": (
-                            extracted.complainant
-                        ),
-                        "role": "COMPLAINANT",
-                        "result": (
-                            complainant_result
-                        ),
-                    }
+                compatibility_person = (
+                    self.extraction_adapter
+                    .person_to_domain(
+                        person=person,
+                        role=role,
+                    )
                 )
 
-                print(
-                    f"✓ Complainant resolved: "
-                    f"{extracted.complainant.name} "
-                    f"→ "
-                    f"{complainant_result['match_type']}"
-                )
-
-            # ==========================================
-            # 5B. ACCUSED
-            # ==========================================
-
-            for accused in extracted.accused:
-
                 # --------------------------------------
-                # Explicitly unknown person
+                # Unknown / unidentified person
                 # --------------------------------------
 
-                if self._is_unknown_person(
-                    accused.name
+                if (
+                    self._is_unknown_extraction_person(
+                        person
+                    )
                 ):
 
                     unknown = (
                         self.unknown_identity_service.create(
                             case_id=case_id,
-                            label=accused.name,
+                            label=person.name,
                             document_id=document_id,
-                            role="ACCUSED",
-                            description=None,
+                            role=role,
+                            description=person.evidence,
                             source_section=(
-                                accused.source_section
+                                "semantic_extraction"
                             ),
                         )
                     )
@@ -445,42 +452,190 @@ class FIRPipeline:
                     resolved_unknowns.append(
                         {
                             "unknown": unknown,
-                            "role": "ACCUSED",
+                            "role": role,
                         }
                     )
 
                     print(
                         f"✓ Unknown identity created: "
-                        f"{accused.name} "
-                        f"→ "
+                        f"{person.name} → "
                         f"{unknown['unknown_id']}"
                     )
 
                     continue
 
                 # --------------------------------------
-                # Known/provisional person
+                # Known / provisional person
                 # --------------------------------------
 
-                accused_result = (
+                person_result = (
                     self.person_resolver.resolve(
-                        accused
+                        compatibility_person
                     )
                 )
 
                 resolved_people.append(
                     {
-                        "person": accused,
-                        "role": "ACCUSED",
-                        "result": accused_result,
+                        "person": (
+                            compatibility_person
+                        ),
+                        "role": role,
+                        "result": person_result,
                     }
                 )
 
                 print(
-                    f"✓ Accused resolved: "
-                    f"{accused.name} "
-                    f"→ "
-                    f"{accused_result['match_type']}"
+                    f"✓ Person resolved: "
+                    f"{person.name} → "
+                    f"{person_result['match_type']} "
+                    f"as {role}"
+                )
+
+            # ==========================================
+            # 4B. GENERIC ENTITIES
+            # ==========================================
+
+            generic_entities = []
+
+            # ------------------------------------------
+            # Organizations
+            # ------------------------------------------
+
+            for organization in (
+                document_extraction.organizations
+            ):
+
+                if (
+                    not organization.name
+                    or not organization.name.strip()
+                ):
+                    continue
+
+                entity = (
+                    self.entity_resolver.resolve(
+                        entity_type="ORGANIZATION",
+                        value=organization.name,
+                        case_id=case_id,
+                        document_id=document_id,
+                    )
+                )
+
+                generic_entities.append(
+                    entity
+                )
+
+                print(
+                    f"✓ Organization resolved: "
+                    f"{organization.name} → "
+                    f"{entity['entity_id']}"
+                )
+
+            # ------------------------------------------
+            # Locations
+            # ------------------------------------------
+
+            for location in (
+                document_extraction.locations
+            ):
+
+                if (
+                    not location.name
+                    or not location.name.strip()
+                ):
+                    continue
+
+                entity = (
+                    self.entity_resolver.resolve(
+                        entity_type="LOCATION",
+                        value=location.name,
+                        case_id=case_id,
+                        document_id=document_id,
+                    )
+                )
+
+                generic_entities.append(
+                    entity
+                )
+
+                print(
+                    f"✓ Location resolved: "
+                    f"{location.name} → "
+                    f"{entity['entity_id']}"
+                )
+
+            # ------------------------------------------
+            # Vehicles
+            # ------------------------------------------
+
+            for vehicle in (
+                document_extraction.vehicles
+            ):
+
+                value = (
+                    vehicle.registration_number
+                    or vehicle.description
+                    or vehicle.vehicle_type
+                )
+
+                if (
+                    not value
+                    or not value.strip()
+                ):
+                    continue
+
+                entity = (
+                    self.entity_resolver.resolve(
+                        entity_type="VEHICLE",
+                        value=value,
+                        case_id=case_id,
+                        document_id=document_id,
+                    )
+                )
+
+                generic_entities.append(
+                    entity
+                )
+
+                print(
+                    f"✓ Vehicle resolved: "
+                    f"{value} → "
+                    f"{entity['entity_id']}"
+                )
+
+            # ------------------------------------------
+            # Phone numbers
+            # ------------------------------------------
+
+            phone_values = set(
+                document_extraction.phone_numbers
+            )
+
+            for person in (
+                document_extraction.persons
+            ):
+                phone_values.update(
+                    person.phone_numbers
+                )
+
+            for phone in phone_values:
+
+                if (
+                    not phone
+                    or not phone.strip()
+                ):
+                    continue
+
+                entity = (
+                    self.entity_resolver.resolve(
+                        entity_type="PHONE",
+                        value=phone,
+                        case_id=case_id,
+                        document_id=document_id,
+                    )
+                )
+
+                generic_entities.append(
+                    entity
                 )
 
             self._update_step(
@@ -493,11 +648,13 @@ class FIRPipeline:
                 f"✓ Entity resolution completed: "
                 f"{len(resolved_people)} persons, "
                 f"{len(resolved_unknowns)} "
-                f"unknown identities"
+                f"unknown identities, "
+                f"{len(generic_entities)} "
+                f"generic entities"
             )
 
             # ==========================================
-            # 6. DATABASE UPDATE
+            # 5. DATABASE UPDATE
             # ==========================================
 
             self._update_step(
@@ -507,7 +664,7 @@ class FIRPipeline:
             )
 
             # ==========================================
-            # 6A. CASE ↔ PERSON
+            # 5A. CASE ↔ PERSON
             # ==========================================
 
             for item in resolved_people:
@@ -520,8 +677,6 @@ class FIRPipeline:
 
                 # --------------------------------------
                 # MATCHED
-                #
-                # Existing canonical person.
                 # --------------------------------------
 
                 if match_type == "MATCHED":
@@ -539,16 +694,14 @@ class FIRPipeline:
                     )
 
                     print(
-                        f"✓ Case linked to matched person: "
+                        f"✓ Case linked to matched "
+                        f"person: "
                         f"{item['person'].name} "
                         f"as {item['role']}"
                     )
 
                 # --------------------------------------
                 # NEW
-                #
-                # Resolver has already created the
-                # provisional person.
                 # --------------------------------------
 
                 elif match_type == "NEW":
@@ -566,15 +719,14 @@ class FIRPipeline:
                     )
 
                     print(
-                        f"✓ Case linked to new person: "
+                        f"✓ Case linked to new "
+                        f"person: "
                         f"{item['person'].name} "
                         f"as {item['role']}"
                     )
 
                 # --------------------------------------
                 # CANDIDATE
-                #
-                # DO NOT automatically merge.
                 # --------------------------------------
 
                 elif match_type == "CANDIDATE":
@@ -595,7 +747,7 @@ class FIRPipeline:
                     )
 
             # ==========================================
-            # 6B. CASE ↔ UNKNOWN IDENTITY
+            # 5B. CASE ↔ UNKNOWN IDENTITY
             # ==========================================
 
             for item in resolved_unknowns:
@@ -613,12 +765,13 @@ class FIRPipeline:
                 )
 
                 print(
-                    f"✓ Case linked to unknown identity: "
+                    f"✓ Case linked to unknown "
+                    f"identity: "
                     f"{unknown['label']}"
                 )
 
             # ==========================================
-            # 6C. INCIDENT
+            # 5C. INCIDENT
             # ==========================================
 
             incident = (
@@ -629,7 +782,6 @@ class FIRPipeline:
                     extracted_incident=(
                         extracted.incident
                     ),
-                    llm_analysis=analysis,
                 )
             )
 
@@ -643,13 +795,15 @@ class FIRPipeline:
             )
 
             # ==========================================
-            # 6D. RELATIONSHIPS
+            # 5D. RELATIONSHIPS
             # ==========================================
 
             relationships_created = 0
             relationships_unresolved = 0
 
-            for candidate in analysis.relationships:
+            for candidate in (
+                document_extraction.relationships
+            ):
 
                 resolved_relationship = (
                     self.relationship_resolver
@@ -765,7 +919,7 @@ class FIRPipeline:
             )
 
             # ==========================================
-            # 7. JOB COMPLETED
+            # 6. JOB COMPLETED
             # ==========================================
 
             self._update_job(
@@ -800,7 +954,112 @@ class FIRPipeline:
             raise
 
     # ==================================================
-    # UNKNOWN PERSON DETECTION
+    # PERSON ROLE
+    # ==================================================
+
+    @staticmethod
+    def _primary_person_role(
+        roles: list[str] | None,
+    ) -> str:
+        """
+        Convert Gemini's semantic roles into the
+        primary role used by the existing case/person
+        linking layer.
+        """
+
+        if not roles:
+            return "OTHER"
+
+        normalized = {
+            role.strip().upper()
+            for role in roles
+            if role and role.strip()
+        }
+
+        # Keep this ordering deterministic.
+        priority = [
+            "COMPLAINANT",
+            "INFORMANT",
+            "ACCUSED",
+            "VICTIM",
+            "WITNESS",
+            "KEY_OPERATOR",
+            "UNKNOWN_ACCOMPLICE",
+            "OFFICER",
+        ]
+
+        for role in priority:
+
+            if role not in normalized:
+                continue
+
+            if role == "INFORMANT":
+                return "COMPLAINANT"
+
+            if role == "UNKNOWN_ACCOMPLICE":
+                return "UNKNOWN"
+
+            return role
+
+        return sorted(normalized)[0]
+
+    # ==================================================
+    # SEMANTIC UNKNOWN DETECTION
+    # ==================================================
+
+    @staticmethod
+    def _is_unknown_extraction_person(
+        person,
+    ) -> bool:
+        """
+        Detect people that Gemini explicitly identifies
+        as unknown, unidentified, anonymous, or provisional.
+
+        Examples:
+
+            Agent Blue
+            Unidentified Foreign Node
+            Unknown Accomplice
+
+        Unknown identities must NOT be sent to PersonResolver.
+        """
+
+        roles = {
+            role.strip().upper()
+            for role in (person.roles or [])
+            if role and role.strip()
+        }
+
+        unknown_roles = {
+            "UNKNOWN",
+            "UNKNOWN_PERSON",
+            "UNKNOWN_ACCOMPLICE",
+            "UNIDENTIFIED",
+            "ANONYMOUS",
+        }
+
+        if roles & unknown_roles:
+            return True
+
+        name = (
+            person.name.strip().lower()
+            if person.name
+            else ""
+        )
+
+        unknown_markers = (
+            "unknown",
+            "unidentified",
+            "anonymous",
+        )
+
+        return any(
+            marker in name
+            for marker in unknown_markers
+        )
+
+    # ==================================================
+    # LEGACY UNKNOWN PERSON DETECTION
     # ==================================================
 
     @staticmethod
@@ -808,13 +1067,8 @@ class FIRPipeline:
         name: str | None,
     ) -> bool:
         """
-        Detect the deterministic labels generated by
-        the extraction layer for unidentified people.
-
-        Examples:
-
-            UNKNOWN_PERSON_1
-            UNKNOWN_PERSON_2
+        Backward-compatible detection for legacy
+        deterministic UNKNOWN_PERSON_N labels.
         """
 
         if not name:
@@ -898,7 +1152,7 @@ class FIRPipeline:
             )
 
     # ==================================================
-    # DETERMINISTIC EXTRACTION PERSISTENCE
+    # LEGACY EXTRACTION PERSISTENCE
     # ==================================================
 
     def _store_extraction(
@@ -985,6 +1239,10 @@ class FIRPipeline:
                         )
                     ),
 
+                    "extraction_method": (
+                        "GEMINI_DOCUMENT_EXTRACTION"
+                    ),
+
                     "updated_at": (
                         self._utc_now()
                     ),
@@ -1000,42 +1258,44 @@ class FIRPipeline:
         )
 
     # ==================================================
-    # LLM ANALYSIS PERSISTENCE
+    # SEMANTIC EXTRACTION PERSISTENCE
     # ==================================================
 
-    def _store_llm_analysis(
+    def _store_document_extraction(
         self,
         job_id,
         case_id,
         document_id,
-        analysis,
+        extraction,
     ):
         """
-        Store Gemini's Pydantic result in MongoDB.
+        Store Gemini's complete universal extraction.
 
-        Gemini currently returns:
+        This is deliberately separate from the compatibility
+        `extractions` collection.
 
-            IncidentAnalysis
-                ├── summary
-                ├── key_points
-                ├── modus_operandi
-                └── relationships
-                        └── RelationshipCandidate
+        The semantic extraction preserves information that the
+        legacy ExtractedFIR compatibility model cannot represent,
+        including:
 
-        PyMongo cannot directly encode the nested
-        Pydantic objects.
-
-        Therefore serialization happens here, at the
-        persistence boundary.
+            organizations
+            locations
+            vehicles
+            evidence
+            relationships
+            aliases
+            provenance/evidence text
+            document type
+            summary
         """
 
-        analysis = (
+        serialized = (
             self._serialize_for_mongo(
-                analysis
+                extraction
             )
         )
 
-        db.llm_analyses.update_one(
+        db.document_extractions.update_one(
             {
                 "job_id": job_id,
             },
@@ -1044,7 +1304,14 @@ class FIRPipeline:
                     "job_id": job_id,
                     "case_id": case_id,
                     "document_id": document_id,
-                    "analysis": analysis,
+                    "document_type": (
+                        extraction.document_type
+                    ),
+                    "extraction": serialized,
+                    "model": self._llm_model_name(),
+                    "method": (
+                        "GEMINI_DOCUMENT_EXTRACTION"
+                    ),
                     "updated_at": (
                         self._utc_now()
                     ),
@@ -1060,101 +1327,24 @@ class FIRPipeline:
         )
 
     # ==================================================
-    # MONGO SERIALIZATION
+    # LLM MODEL NAME
     # ==================================================
 
     @staticmethod
-    def _serialize_for_mongo(
-        value,
-    ):
+    def _llm_model_name() -> str:
         """
-        Convert application objects into MongoDB-safe
-        Python structures.
+        Return the configured Gemini model name.
 
-        Currently handles:
-
-            Pydantic BaseModel
-            dict
-            list
-            tuple
-
-        Pydantic model_dump() recursively converts nested
-        Pydantic models such as RelationshipCandidate.
-
-        We intentionally keep this logic at the persistence
-        boundary instead of making LLM models MongoDB-aware.
+        The worker currently uses GEMINI_MODEL when supplied
+        and otherwise the application's Gemini default.
         """
 
-        # ----------------------------------------------
-        # Pydantic model
-        # ----------------------------------------------
+        import os
 
-        if isinstance(
-            value,
-            BaseModel,
-        ):
-
-            return (
-                FIRPipeline._serialize_for_mongo(
-                    value.model_dump()
-                )
-            )
-
-        # ----------------------------------------------
-        # Dictionary
-        # ----------------------------------------------
-
-        if isinstance(
-            value,
-            dict,
-        ):
-
-            return {
-                key: (
-                    FIRPipeline._serialize_for_mongo(
-                        item
-                    )
-                )
-                for key, item in value.items()
-            }
-
-        # ----------------------------------------------
-        # List
-        # ----------------------------------------------
-
-        if isinstance(
-            value,
-            list,
-        ):
-
-            return [
-                FIRPipeline._serialize_for_mongo(
-                    item
-                )
-                for item in value
-            ]
-
-        # ----------------------------------------------
-        # Tuple
-        # ----------------------------------------------
-
-        if isinstance(
-            value,
-            tuple,
-        ):
-
-            return [
-                FIRPipeline._serialize_for_mongo(
-                    item
-                )
-                for item in value
-            ]
-
-        # ----------------------------------------------
-        # Primitive
-        # ----------------------------------------------
-
-        return value
+        return os.getenv(
+            "GEMINI_MODEL",
+            "gemini-3.5-flash-lite",
+        )
 
     # ==================================================
     # IDENTITY CANDIDATES
@@ -1354,9 +1544,11 @@ class FIRPipeline:
             update["completed_at"] = (
                 self._utc_now()
             )
+
             update["error"] = None
 
         if status == "PROCESSING":
+
             update["error"] = None
 
         db.ingestion_jobs.update_one(
@@ -1392,6 +1584,77 @@ class FIRPipeline:
                 }
             },
         )
+
+    # ==================================================
+    # MONGO SERIALIZATION
+    # ==================================================
+
+    @staticmethod
+    def _serialize_for_mongo(
+        value,
+    ):
+        """
+        Convert application objects into MongoDB-safe
+        Python structures.
+
+        Handles:
+
+            Pydantic BaseModel
+            dict
+            list
+            tuple
+        """
+
+        if isinstance(
+            value,
+            BaseModel,
+        ):
+
+            return (
+                FIRPipeline._serialize_for_mongo(
+                    value.model_dump()
+                )
+            )
+
+        if isinstance(
+            value,
+            dict,
+        ):
+
+            return {
+                key: (
+                    FIRPipeline._serialize_for_mongo(
+                        item
+                    )
+                )
+                for key, item in value.items()
+            }
+
+        if isinstance(
+            value,
+            list,
+        ):
+
+            return [
+                FIRPipeline._serialize_for_mongo(
+                    item
+                )
+                for item in value
+            ]
+
+        if isinstance(
+            value,
+            tuple,
+        ):
+
+            return [
+                FIRPipeline._serialize_for_mongo(
+                    item
+                )
+                for item in value
+            ]
+
+        return value
 
     # ==================================================
     # TIME
