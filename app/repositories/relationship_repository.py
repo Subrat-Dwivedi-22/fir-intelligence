@@ -4,6 +4,7 @@ from app.db.mongodb import db
 from app.models.relationship import (
     create_relationship,
 )
+from app.services.relationship.weight import relationship_weight
 
 
 class RelationshipRepository:
@@ -60,6 +61,7 @@ class RelationshipRepository:
 
             update = {
                 "updated_at": now,
+                "weight": relationship_weight(relationship_type),
             }
 
             if evidence:
@@ -82,6 +84,7 @@ class RelationshipRepository:
 
             return existing
 
+
         # ------------------------------------------
         # Create new relationship
         # ------------------------------------------
@@ -98,6 +101,7 @@ class RelationshipRepository:
             pages=pages,
             confidence=confidence,
             evidence=evidence,
+            weight=relationship_weight(relationship_type),
         )
 
         db.relationships.insert_one(

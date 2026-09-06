@@ -86,14 +86,11 @@ class RelationshipResolver:
 
         return {
             "status": "RESOLVED",
-
             "from": subject,
-
             "to": object_endpoint,
-
             "type": candidate.predicate.strip().upper(),
-
             "evidence": candidate.evidence,
+            "confidence": candidate.confidence,
         }
 
     # ==================================================

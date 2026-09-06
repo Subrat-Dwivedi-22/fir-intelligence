@@ -61,6 +61,7 @@ def get_case_graph(case_id: str):
                     "aliases": "$person.identity.aliases",
                     "roles": 1,
                     "confidence": 1,
+                    "weight": 1,
                 }
             },
         ])
@@ -132,6 +133,7 @@ def get_case_graph(case_id: str):
                 "type": 1,
                 "evidence": 1,
                 "confidence": 1,
+                "weight": 1,
             },
         )
     )
@@ -163,6 +165,7 @@ def get_case_graph(case_id: str):
             "id": incident["incident_id"],
             "type": "INCIDENT",
             "label": incident.get("title") or "Incident",
+            "roles": [],
         })
 
     for entity in entities:
@@ -171,6 +174,7 @@ def get_case_graph(case_id: str):
             "type": "ENTITY",
             "entity_type": entity.get("type"),
             "label": entity.get("value") or entity.get("type") or "Entity",
+            "roles": [],
         })
 
     edges = []
@@ -183,6 +187,7 @@ def get_case_graph(case_id: str):
             "type": relationship["type"],
             "evidence": relationship.get("evidence"),
             "confidence": relationship.get("confidence"),
+            "weight": relationship.get("weight", 0.50),
         })
 
     return serialize_mongo({

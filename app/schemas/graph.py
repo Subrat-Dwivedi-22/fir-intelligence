@@ -16,6 +16,7 @@ class GraphEdge(BaseModel):
     type: str
     evidence: str | None = None
     confidence: float | None = None
+    weight: float = 0.50
 
     model_config = {
         "populate_by_name": True,

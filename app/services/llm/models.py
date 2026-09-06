@@ -330,7 +330,7 @@ class ExtractedOrganization(BaseModel):
 class ExtractedLocation(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    name: str
+    name: str | None = None
     location_type: str | None = None
     address: str | None = None
     evidence: str | None = None
@@ -687,16 +687,12 @@ class RelationshipCandidate(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     subject: str
-
     subject_type: str
-
     predicate: str
-
     object: str
-
     object_type: str
-
     evidence: str
+    confidence: float = 0.0
 
     @field_validator(
         "subject",
@@ -711,17 +707,27 @@ class RelationshipCandidate(BaseModel):
     def normalize_strings(cls, value):
         return normalize_string(value)
 
-    @field_validator(
-        "subject_type",
-        "object_type",
-        mode="after",
-    )
+    @field_validator("subject_type", "object_type", mode="after")
     @classmethod
     def normalize_entity_types(cls, value):
-        if value is None:
-            return value
-
         return value.upper()
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, value):
+        if value is None:
+            return 0.0
+
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+        # Gemini sometimes returns percentages.
+        if value > 1.0 and value <= 100.0:
+            value /= 100.0
+
+        return max(0.0, min(1.0, value))
 
 
 # ============================================================

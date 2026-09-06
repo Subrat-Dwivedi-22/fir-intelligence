@@ -878,7 +878,7 @@ class FIRPipeline:
                         case_id=case_id,
                         incident_id=incident_id,
                         document_id=document_id,
-                        confidence=None,
+                        confidence=resolved_relationship["confidence"],
                         evidence=(
                             resolved_relationship[
                                 "evidence"

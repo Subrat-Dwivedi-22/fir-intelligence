@@ -931,6 +931,27 @@ representative", "his associate", "the driver", "the manager"), preserve the
 relationship only if the endpoint can be safely resolved from the document.
 Otherwise do not invent an endpoint.
 
+For every extracted relationship, provide confidence from 0.0 to 1.0.
+
+Confidence measures how strongly the document supports the relationship itself.
+
+0.90-1.00:
+The relationship is explicitly stated or directly supported by clear evidence.
+
+0.70-0.89:
+The relationship is strongly supported but requires a small amount of interpretation.
+
+0.40-0.69:
+The relationship is ambiguous or only partially supported.
+
+0.10-0.39:
+The relationship is speculative or weakly implied.
+
+Do not create a relationship merely because it seems plausible.
+If the document does not provide sufficient evidence, omit the relationship.
+
+Confidence must reflect extraction evidence, NOT entity-resolution certainty.
+
 
 
 ============================================================

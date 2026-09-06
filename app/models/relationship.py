@@ -14,6 +14,7 @@ def create_relationship(
     pages: list[int] | None = None,
     confidence: float | None = None,
     evidence: str | None = None,
+    weight: float = 0.50,
 ):
     return {
         "relationship_id": str(
@@ -43,6 +44,7 @@ def create_relationship(
         },
 
         "confidence": confidence,
+        "weight": weight,
 
         "evidence": evidence,
 
