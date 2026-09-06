@@ -351,7 +351,7 @@ class ExtractedOrganization(BaseModel):
 
     evidence: str | None = None
 
-    confidence: float = 0.0
+    confidence: float
 
     @field_validator(
         "aliases",
@@ -405,7 +405,7 @@ class ExtractedLocation(BaseModel):
 
     evidence: str | None = None
 
-    confidence: float = 0.0
+    confidence: float
 
     @model_validator(mode="before")
     @classmethod
@@ -454,7 +454,7 @@ class ExtractedVehicle(BaseModel):
 
     evidence: str | None = None
 
-    confidence: float = 0.0
+    confidence: float 
 
     @field_validator(
         "registration_number",

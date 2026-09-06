@@ -1593,6 +1593,7 @@ DOCUMENT TO EXTRACT
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
+                    response_schema=DocumentExtraction,
                     temperature=0,
                 ),
             )
@@ -1610,6 +1611,36 @@ DOCUMENT TO EXTRACT
 
         try:
             payload = json.loads(raw)
+
+            print("\n========== RAW GEMINI ENTITY CONFIDENCE ==========")
+
+            for item in payload.get("organizations", []):
+                print(
+                    "ORGANIZATION:",
+                    item.get("name"),
+                    "confidence=",
+                    item.get("confidence"),
+                )
+
+            for item in payload.get("locations", []):
+                print(
+                    "LOCATION:",
+                    item.get("name") or item.get("address"),
+                    "confidence=",
+                    item.get("confidence"),
+                )
+
+            for item in payload.get("vehicles", []):
+                print(
+                    "VEHICLE:",
+                    item.get("registration_number")
+                    or item.get("description"),
+                    "confidence=",
+                    item.get("confidence"),
+                )
+
+            print("=================================================\n")
+
         except json.JSONDecodeError as exc:
             raise ValueError(
                 "Gemini returned invalid JSON for document extraction"
