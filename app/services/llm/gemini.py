@@ -895,7 +895,73 @@ object = "complainant"
 
 object_type = "PERSON"
 
-Use concise, semantically meaningful predicates.
+Use ONLY the following canonical predicates:
+
+OWNS
+CONTROLS
+TRANSFERRED_FUNDS_TO
+PAID
+POSSESSED
+USED
+DELIVERED_TO
+INTRODUCED_TO
+THREATENED
+ARRANGED_MEETING_WITH
+COLLUDED_WITH
+ASSOCIATED_WITH
+LOCATED_AT
+
+Do NOT invent, abbreviate, or modify predicate names.
+
+For example:
+"paid" → PAID
+"paid money to" → PAID
+"transferred funds to" → TRANSFERRED_FUNDS_TO
+"introduced" → INTRODUCED_TO
+"arranged a meeting with" → ARRANGED_MEETING_WITH
+
+INTRODUCTION RELATIONSHIPS
+
+For introduction statements, preserve the actual participants in the
+introduction.
+
+When the text has the form:
+
+"Person A introduced Person B to Person C."
+
+interpret the relationship as:
+
+subject = Person A
+predicate = INTRODUCED_TO
+object = Person B
+
+The evidence should preserve the full sentence.
+
+Do not use Person C as the object merely because Person C appears after "to".
+
+Example:
+
+"Amit Sharma introduced Rajesh Kumar to Priya Mehta."
+
+→
+
+subject = "Amit Sharma"
+subject_type = "PERSON"
+predicate = "INTRODUCED_TO"
+object = "Rajesh Kumar"
+object_type = "PERSON"
+
+If the sentence instead clearly states:
+
+"Amit Sharma introduced Rajesh Kumar to Priya Mehta at the meeting."
+
+the relationship remains:
+
+Amit Sharma INTRODUCED_TO Rajesh Kumar
+
+Do not create a separate relationship to Priya Mehta unless the document
+explicitly establishes another relationship involving Priya Mehta.
+
 
 RELATIONSHIP ARGUMENT ACCURACY
 
@@ -931,28 +997,175 @@ representative", "his associate", "the driver", "the manager"), preserve the
 relationship only if the endpoint can be safely resolved from the document.
 Otherwise do not invent an endpoint.
 
-For every extracted relationship, provide confidence from 0.0 to 1.0.
+============================================================
+ENTITY EXTRACTION CONFIDENCE
+============================================================
 
-Confidence measures how strongly the document supports the relationship itself.
+For every extracted person, organization, location, and vehicle,
+provide a confidence value from 0.0 to 1.0.
 
-0.90-1.00:
-The relationship is explicitly stated or directly supported by clear evidence.
+Confidence represents how strongly the document supports BOTH:
 
-0.70-0.89:
-The relationship is strongly supported but requires a small amount of interpretation.
+1. The existence/identity of the extracted entity.
+2. The entity's documented relevance or involvement in the information
+   being extracted.
 
-0.40-0.69:
-The relationship is ambiguous or only partially supported.
+Confidence is NOT a measure of criminal guilt, legal culpability,
+or whether the entity is a suspect.
 
-0.10-0.39:
-The relationship is speculative or weakly implied.
+A witness, victim, complainant, police officer, family member, or
+other non-suspect can still have high confidence when the document
+clearly identifies them.
 
-Do not create a relationship merely because it seems plausible.
-If the document does not provide sufficient evidence, omit the relationship.
+Use the following scale carefully:
 
-Confidence must reflect extraction evidence, NOT entity-resolution certainty.
+0.95-1.00:
+The entity is explicitly identified and directly involved in a
+clearly documented event, action, transaction, or relationship.
 
+Examples:
+- "Rajesh Kumar paid ₹5,00,000 to ABC Ltd."
+- "Priya Mehta was arrested at the location."
+- "Vehicle DL01AB1234 was used in the incident."
 
+0.90-0.94:
+The entity is explicitly identified with strong supporting details,
+but its involvement is somewhat less direct than the primary
+participants.
+
+Examples:
+- A clearly identified person who arranged or facilitated an event.
+- An organization explicitly identified as connected to a transaction.
+- A clearly identified vehicle associated with the incident.
+
+0.80-0.89:
+The entity is clearly identified and relevant to the investigation,
+but is primarily associated with or indirectly connected to the
+main event.
+
+Examples:
+- An associate of an accused.
+- An employee of an involved organization.
+- A person who facilitated contact but did not participate directly.
+
+0.65-0.79:
+The entity is clearly mentioned and has a secondary or peripheral
+connection.
+
+Examples:
+- A relative.
+- A friend or acquaintance.
+- A witness with limited involvement.
+- An intermediary whose exact role is not central to the event.
+
+0.45-0.64:
+The entity is mentioned or partially identified, but the document
+provides limited evidence about its relevance or connection.
+
+0.20-0.44:
+The entity is weakly implied, ambiguously identified, or supported
+only by limited contextual evidence.
+
+0.00-0.19:
+The entity is highly speculative or insufficiently supported.
+Do NOT create an entity merely because it seems plausible.
+
+IMPORTANT:
+
+Do not assign 1.0 merely because an entity's name appears explicitly.
+
+Consider the entity's documented role, supporting details, and degree
+of involvement when selecting the confidence value.
+
+Do not automatically give every explicitly named entity the same
+confidence.
+
+Do not use confidence to indicate whether two mentions refer to the
+same real-world entity. Entity resolution is handled separately by
+the application.
+
+Do not use confidence to indicate guilt, suspicion, or legal liability.
+
+Confidence must reflect the evidence present in the source document,
+not assumptions or outside knowledge.
+
+============================================================
+RELATIONSHIP EXTRACTION CONFIDENCE
+============================================================
+
+For every extracted relationship, provide a confidence value from
+0.0 to 1.0.
+
+Confidence represents how strongly the source document supports the
+specific relationship between the subject and object.
+
+Do NOT assign confidence based merely on the fact that both entities
+appear in the same document.
+
+Use the following scale:
+
+0.95-1.00:
+The relationship is directly and explicitly stated in the document.
+
+Examples:
+"Rajesh Kumar transferred Rs. 25,00,000 to ABC Infrastructure Pvt Ltd."
+→ confidence should be approximately 0.95-1.00
+
+"Amit Sharma threatened Rajesh Kumar."
+→ confidence should be approximately 0.95-1.00
+
+0.90-0.94:
+The relationship is explicitly supported but requires minor
+interpretation or normalization.
+
+0.80-0.89:
+The relationship is strongly supported by the document but is
+indirect or involves a secondary role.
+
+0.65-0.79:
+The relationship is plausible and supported by contextual evidence,
+but is not directly stated.
+
+0.45-0.64:
+The relationship is ambiguous or supported only by limited evidence.
+
+0.20-0.44:
+The relationship is weakly implied.
+
+Below 0.20:
+The relationship is highly speculative.
+Do NOT extract the relationship merely because it seems plausible.
+
+IMPORTANT:
+
+Do not assign 1.0 to every explicitly stated relationship.
+
+Use the full range appropriately.
+
+Confidence measures the strength of evidence for THIS relationship,
+not the confidence that the entities themselves are correctly resolved.
+
+Do not use relationship confidence to indicate criminal guilt,
+legal liability, or suspicion.
+
+Do not infer a relationship solely from:
+- co-occurrence
+- shared addresses
+- shared organizations
+- being mentioned in the same incident
+- being relatives
+- being associates
+
+unless the document explicitly supports the relationship.
+
+Every relationship object MUST contain:
+subject
+subject_type
+predicate
+object
+object_type
+evidence
+confidence
 
 ============================================================
 19A. UNKNOWN RELATIONSHIP ENDPOINTS

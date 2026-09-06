@@ -7,6 +7,7 @@ class GraphNode(BaseModel):
     label: str
     entity_type: str | None = None
     roles: list[str] = []
+    confidence: float | None = None
 
 
 class GraphEdge(BaseModel):

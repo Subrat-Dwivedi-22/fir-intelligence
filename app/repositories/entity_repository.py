@@ -44,6 +44,7 @@ class EntityRepository:
         case_id: str | None = None,
         document_id: str | None = None,
         pages: list[int] | None = None,
+        confidence: float | None = None,
     ) -> dict:
 
         existing = self.find_by_normalized_value(
@@ -69,9 +70,13 @@ class EntityRepository:
                             "updated_at": datetime.now(
                                 timezone.utc
                             ),
+                            **({"confidence": confidence} if confidence is not None else {}),
                         },
                     },
                 )
+
+                if confidence is not None:
+                    existing["confidence"] = confidence
 
                 existing["case_ids"] = list(
                     set(
@@ -92,6 +97,7 @@ class EntityRepository:
             case_id=case_id,
             document_id=document_id,
             pages=pages,
+            confidence=confidence,
         )
 
         db.entities.insert_one(

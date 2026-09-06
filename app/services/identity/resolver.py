@@ -103,6 +103,11 @@ class PersonResolver:
 
             if existing:
 
+                self._update_extraction_confidence(
+                    existing["person_id"],
+                    person.confidence,
+                )
+
                 return {
                     "person_id": existing[
                         "person_id"
@@ -151,6 +156,11 @@ class PersonResolver:
                         and best["has_dob_match"]
                         and best["confidence"] >= 0.90
                     ):
+
+                        self._update_extraction_confidence(
+                            best["person_id"],
+                            person.confidence,
+                        )
 
                         return {
                             "person_id": best[
@@ -447,6 +457,64 @@ class PersonResolver:
         )
 
     # ==================================================
+    # UPDATE EXTRACTION CONFIDENCE
+    # ==================================================
+
+    def _update_extraction_confidence(
+        self,
+        person_id: str,
+        confidence: float,
+    ) -> None:
+        """
+        Preserve the strongest extraction confidence
+        observed for a canonical person.
+
+        This is separate from identity-resolution confidence.
+        """
+
+        existing = db.persons.find_one(
+            {
+                "person_id": person_id,
+            },
+            {
+                "_id": 0,
+                "extraction_confidence": 1,
+            },
+        )
+
+        if not existing:
+            return
+
+        existing_confidence = existing.get(
+            "extraction_confidence"
+        )
+
+        if existing_confidence is None:
+            existing_confidence = 0.0
+
+        try:
+            existing_confidence = float(
+                existing_confidence
+            )
+        except (TypeError, ValueError):
+            existing_confidence = 0.0
+
+        if confidence > existing_confidence:
+            db.persons.update_one(
+                {
+                    "person_id": person_id,
+                },
+                {
+                    "$set": {
+                        "extraction_confidence": confidence,
+                        "updated_at": datetime.now(
+                            timezone.utc
+                        ),
+                    }
+                },
+            )
+
+    # ==================================================
     # CREATE PERSON
     # ==================================================
 
@@ -464,6 +532,7 @@ class PersonResolver:
         document = create_person_document(
             person_id=person_id,
             name=extracted.name,
+            extraction_confidence=extracted.confidence,
         )
 
         # ==================================================

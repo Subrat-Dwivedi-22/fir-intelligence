@@ -517,6 +517,7 @@ class FIRPipeline:
                         value=organization.name,
                         case_id=case_id,
                         document_id=document_id,
+                        confidence=organization.confidence,
                     )
                 )
 
@@ -550,6 +551,7 @@ class FIRPipeline:
                         value=location.name,
                         case_id=case_id,
                         document_id=document_id,
+                        confidence=location.confidence,
                     )
                 )
 
@@ -589,6 +591,7 @@ class FIRPipeline:
                         value=value,
                         case_id=case_id,
                         document_id=document_id,
+                        confidence=vehicle.confidence,
                     )
                 )
 

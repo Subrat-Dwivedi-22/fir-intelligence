@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 def create_person_document(
     person_id: str,
     name: str | None = None,
+    extraction_confidence: float | None = None,
 ):
     now = datetime.now(timezone.utc)
 
@@ -32,6 +33,8 @@ def create_person_document(
         },
 
         "addresses": [],
+
+        "extraction_confidence": extraction_confidence,
 
         "identifiers": [],
 

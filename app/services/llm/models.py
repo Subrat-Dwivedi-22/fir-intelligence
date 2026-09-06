@@ -14,6 +14,7 @@ from pydantic import (
 # Shared normalization helpers
 # ============================================================
 
+
 def normalize_string(value: Any) -> Any:
     """
     Normalize a scalar string value.
@@ -113,9 +114,58 @@ def normalize_object_list(value: Any) -> list:
     return []
 
 
+def normalize_confidence_value(value: Any) -> float:
+    """
+    Normalize LLM-generated confidence values to the range 0.0–1.0.
+
+    Supported input:
+
+        None
+            -> 0.0
+
+        0.95
+            -> 0.95
+
+        95
+            -> 0.95
+
+        1
+            -> 1.0
+
+        120
+            -> 1.0
+
+        "0.85"
+            -> 0.85
+
+        "85%"
+            -> 0.85
+    """
+
+    if value is None:
+        return 0.0
+
+    try:
+        if isinstance(value, str):
+            value = value.strip().replace("%", "")
+
+        value = float(value)
+
+    except (TypeError, ValueError):
+        return 0.0
+
+    # Gemini may return percentages.
+    if value > 1.0 and value <= 100.0:
+        value /= 100.0
+
+    # Clamp invalid values into the valid confidence range.
+    return max(0.0, min(1.0, value))
+
+
 # ============================================================
 # Identifier
 # ============================================================
+
 
 class ExtractedIdentifier(BaseModel):
     """
@@ -123,13 +173,13 @@ class ExtractedIdentifier(BaseModel):
 
     Examples:
 
-    FIR number
-    Case number
-    Complaint number
-    GD/DD entry
-    Account number
-    Reference number
-    Transaction identifier
+        FIR number
+        Case number
+        Complaint number
+        GD/DD entry
+        Account number
+        Reference number
+        Transaction identifier
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -205,6 +255,7 @@ class ExtractedIdentifier(BaseModel):
 # Person
 # ============================================================
 
+
 class ExtractedPerson(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -236,6 +287,8 @@ class ExtractedPerson(BaseModel):
 
     evidence: str | None = None
 
+    confidence: float = 0.0
+
     @field_validator(
         "roles",
         "aliases",
@@ -258,6 +311,11 @@ class ExtractedPerson(BaseModel):
     def normalize_optional_strings(cls, value):
         return normalize_string(value)
 
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, value):
+        return normalize_confidence_value(value)
+
     @field_validator("name", mode="before")
     @classmethod
     def normalize_name(cls, value):
@@ -275,6 +333,7 @@ class ExtractedPerson(BaseModel):
 # Organization
 # ============================================================
 
+
 class ExtractedOrganization(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -291,6 +350,8 @@ class ExtractedOrganization(BaseModel):
     )
 
     evidence: str | None = None
+
+    confidence: float = 0.0
 
     @field_validator(
         "aliases",
@@ -310,6 +371,11 @@ class ExtractedOrganization(BaseModel):
     def normalize_optional_strings(cls, value):
         return normalize_string(value)
 
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, value):
+        return normalize_confidence_value(value)
+
     @field_validator("name", mode="before")
     @classmethod
     def normalize_name(cls, value):
@@ -327,13 +393,19 @@ class ExtractedOrganization(BaseModel):
 # Location
 # ============================================================
 
+
 class ExtractedLocation(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     name: str | None = None
+
     location_type: str | None = None
+
     address: str | None = None
+
     evidence: str | None = None
+
+    confidence: float = 0.0
 
     @model_validator(mode="before")
     @classmethod
@@ -360,10 +432,16 @@ class ExtractedLocation(BaseModel):
     def normalize_strings(cls, value):
         return normalize_string(value)
 
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, value):
+        return normalize_confidence_value(value)
+
 
 # ============================================================
 # Vehicle
 # ============================================================
+
 
 class ExtractedVehicle(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -376,6 +454,8 @@ class ExtractedVehicle(BaseModel):
 
     evidence: str | None = None
 
+    confidence: float = 0.0
+
     @field_validator(
         "registration_number",
         "vehicle_type",
@@ -387,10 +467,16 @@ class ExtractedVehicle(BaseModel):
     def normalize_strings(cls, value):
         return normalize_string(value)
 
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, value):
+        return normalize_confidence_value(value)
+
 
 # ============================================================
 # Financial amount
 # ============================================================
+
 
 class ExtractedFinancialAmount(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -546,6 +632,7 @@ class ExtractedFinancialAmount(BaseModel):
 # Evidence
 # ============================================================
 
+
 class ExtractedEvidence(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -592,6 +679,7 @@ class ExtractedEvidence(BaseModel):
             return value if value else None
 
         # Gemini may return numeric values such as:
+        #
         # value = 4500000
         #
         # The schema stores evidence.value as text because
@@ -602,6 +690,7 @@ class ExtractedEvidence(BaseModel):
 # ============================================================
 # Incident
 # ============================================================
+
 
 class ExtractedIncident(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -683,15 +772,22 @@ class ExtractedIncident(BaseModel):
 # Relationship
 # ============================================================
 
+
 class RelationshipCandidate(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     subject: str
+
     subject_type: str
+
     predicate: str
+
     object: str
+
     object_type: str
+
     evidence: str
+
     confidence: float = 0.0
 
     @field_validator(
@@ -707,7 +803,11 @@ class RelationshipCandidate(BaseModel):
     def normalize_strings(cls, value):
         return normalize_string(value)
 
-    @field_validator("subject_type", "object_type", mode="after")
+    @field_validator(
+        "subject_type",
+        "object_type",
+        mode="after",
+    )
     @classmethod
     def normalize_entity_types(cls, value):
         return value.upper()
@@ -715,24 +815,13 @@ class RelationshipCandidate(BaseModel):
     @field_validator("confidence", mode="before")
     @classmethod
     def normalize_confidence(cls, value):
-        if value is None:
-            return 0.0
-
-        try:
-            value = float(value)
-        except (TypeError, ValueError):
-            return 0.0
-
-        # Gemini sometimes returns percentages.
-        if value > 1.0 and value <= 100.0:
-            value /= 100.0
-
-        return max(0.0, min(1.0, value))
+        return normalize_confidence_value(value)
 
 
 # ============================================================
 # Universal document extraction
 # ============================================================
+
 
 class DocumentExtraction(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -841,6 +930,7 @@ class DocumentExtraction(BaseModel):
 # ============================================================
 # Existing incident analysis
 # ============================================================
+
 
 class IncidentAnalysis(BaseModel):
     model_config = ConfigDict(extra="ignore")

@@ -9,6 +9,7 @@ def create_entity_document(
     case_id: str | None = None,
     document_id: str | None = None,
     pages: list[int] | None = None,
+    confidence: float | None = None,
 ):
     now = datetime.now(timezone.utc)
 
@@ -20,6 +21,8 @@ def create_entity_document(
         "value": value,
 
         "normalized_value": normalized_value,
+
+        "confidence": confidence,
 
         "case_ids": (
             [case_id]

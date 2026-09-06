@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 class ExtractedPerson:
     name: str
     role: str | None = None
+    confidence: float = 0.0
 
     father_name: str | None = None
     aliases: list[str] = field(

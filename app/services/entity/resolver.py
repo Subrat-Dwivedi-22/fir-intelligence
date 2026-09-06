@@ -44,6 +44,7 @@ class EntityResolver:
         case_id: str | None = None,
         document_id: str | None = None,
         pages: list[int] | None = None,
+        confidence: float | None = None,
     ) -> dict:
 
         if not value or not value.strip():
@@ -72,4 +73,5 @@ class EntityResolver:
             case_id=case_id,
             document_id=document_id,
             pages=pages,
+            confidence=confidence,
         )

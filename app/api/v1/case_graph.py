@@ -60,8 +60,7 @@ def get_case_graph(case_id: str):
                     "name": "$person.identity.name",
                     "aliases": "$person.identity.aliases",
                     "roles": 1,
-                    "confidence": 1,
-                    "weight": 1,
+                    "extraction_confidence": "$person.extraction_confidence",
                 }
             },
         ])
@@ -150,6 +149,7 @@ def get_case_graph(case_id: str):
             "type": "PERSON",
             "label": person.get("name") or "Unknown Person",
             "roles": person.get("roles", []),
+            "confidence": person.get("extraction_confidence"),
         })
 
     for unknown in unknowns:

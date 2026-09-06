@@ -220,6 +220,7 @@ class DocumentExtractionAdapter:
         return ExtractedPerson(
             name=person.name.strip(),
             role=role,
+            confidence=person.confidence,
             aliases=list(
                 person.aliases or []
             ),
