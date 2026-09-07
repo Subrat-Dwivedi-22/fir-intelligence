@@ -629,6 +629,138 @@ class ExtractedFinancialAmount(BaseModel):
 
 
 # ============================================================
+# Financial transaction
+# ============================================================
+
+
+class ExtractedFinancialTransaction(BaseModel):
+    """
+    A source-supported financial transaction.
+
+    Unlike ExtractedFinancialAmount, this represents an actual
+    transaction where the source identifies participants.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    transaction_type: str | None = None
+
+    sender: str | None = None
+    sender_type: str | None = None
+
+    receiver: str | None = None
+    receiver_type: str | None = None
+
+    amount: float | None = None
+    currency: str | None = None
+
+    date: str | None = None
+    time: str | None = None
+
+    account_reference: str | None = None
+
+    context: str | None = None
+
+    evidence: str | None = None
+
+    confidence: float = 0.0
+
+    @field_validator(
+        "transaction_type",
+        "sender",
+        "sender_type",
+        "receiver",
+        "receiver_type",
+        "currency",
+        "date",
+        "time",
+        "account_reference",
+        "context",
+        "evidence",
+        mode="before",
+    )
+    @classmethod
+    def normalize_strings(cls, value):
+        return normalize_string(value)
+
+    @field_validator(
+        "sender_type",
+        "receiver_type",
+        mode="after",
+    )
+    @classmethod
+    def normalize_entity_types(cls, value):
+        if value is None:
+            return None
+
+        return value.upper()
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def normalize_amount(cls, value):
+        if value is None:
+            return None
+
+        if isinstance(value, bool):
+            return None
+
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        if not isinstance(value, str):
+            return None
+
+        normalized = (
+            value.strip()
+            .lower()
+            .replace("₹", "")
+            .replace("rs.", "")
+            .replace("rs ", "")
+            .replace("inr", "")
+            .replace(",", "")
+            .strip()
+        )
+
+        if not normalized:
+            return None
+
+        multipliers = (
+            (r"(?:crore|crores|cr)\\b", 10_000_000),
+            (r"(?:lakh|lakhs|lac|lacs)\\b", 100_000),
+            (r"(?:million|millions)\\b", 1_000_000),
+            (r"(?:billion|billions)\\b", 1_000_000_000),
+            (r"(?:thousand|k)\\b", 1_000),
+        )
+
+        import re
+
+        for pattern, multiplier in multipliers:
+            match = re.search(
+                rf"([-+]?\\d+(?:\\.\\d+)?)\\s*{pattern}",
+                normalized,
+                re.IGNORECASE,
+            )
+
+            if match:
+                return float(match.group(1)) * multiplier
+
+        match = re.search(
+            r"[-+]?\\d+(?:\\.\\d+)?",
+            normalized,
+        )
+
+        if match:
+            return float(match.group(0))
+
+        return None
+
+    @field_validator("confidence", mode="before")
+    @classmethod
+    def normalize_confidence(cls, value):
+        return normalize_confidence_value(value)
+
+
+# ============================================================
 # Evidence
 # ============================================================
 
@@ -769,6 +901,128 @@ class ExtractedIncident(BaseModel):
 
 
 # ============================================================
+# Relationship metadata
+# ============================================================
+
+
+class RelationshipMetadata(BaseModel):
+    """
+    Typed metadata attached to an extracted relationship.
+
+    IMPORTANT:
+    This intentionally uses explicit fields instead of
+    dict[str, Any] because Gemini Developer API response
+    schemas reject arbitrary additionalProperties.
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
+    amount: float | None = None
+
+    currency: str | None = None
+
+    call_count: int | None = None
+
+    transaction_type: str | None = None
+
+    date: str | None = None
+
+    time: str | None = None
+
+    account_reference: str | None = None
+
+    source_context: str | None = None
+
+    @field_validator(
+        "currency",
+        "transaction_type",
+        "date",
+        "time",
+        "account_reference",
+        "source_context",
+        mode="before",
+    )
+    @classmethod
+    def normalize_strings(cls, value):
+        return normalize_string(value)
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def normalize_amount(cls, value):
+        if value is None:
+            return None
+
+        if isinstance(value, bool):
+            return None
+
+        if isinstance(value, (int, float)):
+            return float(value)
+
+        if not isinstance(value, str):
+            return None
+
+        normalized = (
+            value.strip()
+            .lower()
+            .replace("₹", "")
+            .replace("rs.", "")
+            .replace("rs ", "")
+            .replace("inr", "")
+            .replace(",", "")
+            .strip()
+        )
+
+        if not normalized:
+            return None
+
+        multipliers = (
+            (r"(?:crore|crores|cr)\\b", 10_000_000),
+            (r"(?:lakh|lakhs|lac|lacs)\\b", 100_000),
+            (r"(?:million|millions)\\b", 1_000_000),
+            (r"(?:billion|billions)\\b", 1_000_000_000),
+            (r"(?:thousand|k)\\b", 1_000),
+        )
+
+        for pattern, multiplier in multipliers:
+            import re
+
+            match = re.search(
+                rf"([-+]?\\d+(?:\\.\\d+)?)\\s*{pattern}",
+                normalized,
+                re.IGNORECASE,
+            )
+
+            if match:
+                return float(match.group(1)) * multiplier
+
+        import re
+
+        match = re.search(
+            r"[-+]?\\d+(?:\\.\\d+)?",
+            normalized,
+        )
+
+        if match:
+            return float(match.group(0))
+
+        return None
+
+    @field_validator("call_count", mode="before")
+    @classmethod
+    def normalize_call_count(cls, value):
+        if value is None:
+            return None
+
+        if isinstance(value, bool):
+            return None
+
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
+
+
+# ============================================================
 # Relationship
 # ============================================================
 
@@ -790,6 +1044,14 @@ class RelationshipCandidate(BaseModel):
 
     confidence: float = 0.0
 
+    date: str | None = None
+
+    time: str | None = None
+
+    metadata: RelationshipMetadata | None = None
+
+    derivation: str = "DIRECT"
+
     @field_validator(
         "subject",
         "subject_type",
@@ -797,6 +1059,9 @@ class RelationshipCandidate(BaseModel):
         "object",
         "object_type",
         "evidence",
+        "date",
+        "time",
+        "derivation",
         mode="before",
     )
     @classmethod
@@ -811,6 +1076,23 @@ class RelationshipCandidate(BaseModel):
     @classmethod
     def normalize_entity_types(cls, value):
         return value.upper()
+
+    @field_validator("derivation", mode="after")
+    @classmethod
+    def normalize_derivation(cls, value):
+        if not value:
+            return "DIRECT"
+
+        value = value.strip().upper()
+
+        if value not in {
+            "DIRECT",
+            "STRUCTURED_FACT",
+            "EVENT_DERIVED",
+        }:
+            return "DIRECT"
+
+        return value
 
     @field_validator("confidence", mode="before")
     @classmethod
@@ -852,6 +1134,10 @@ class DocumentExtraction(BaseModel):
         default_factory=list
     )
 
+    financial_transactions: list[ExtractedFinancialTransaction] = Field(
+        default_factory=list
+    )
+
     persons: list[ExtractedPerson] = Field(
         default_factory=list
     )
@@ -885,6 +1171,7 @@ class DocumentExtraction(BaseModel):
     @field_validator(
         "identifiers",
         "monetary_amounts",
+        "financial_transactions",
         "persons",
         "organizations",
         "locations",

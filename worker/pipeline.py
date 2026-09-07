@@ -496,6 +496,7 @@ class FIRPipeline:
             # ==========================================
 
             generic_entities = []
+            resolved_locations = []
 
             # ------------------------------------------
             # Organizations
@@ -557,6 +558,13 @@ class FIRPipeline:
 
                 generic_entities.append(
                     entity
+                )
+
+                resolved_locations.append(
+                    {
+                        "extracted_name": location.name,
+                        "entity": entity,
+                    }
                 )
 
                 print(
@@ -796,6 +804,56 @@ class FIRPipeline:
                 f"✓ Incident persisted: "
                 f"{incident_id}"
             )
+
+            # ==========================================
+            # 5C.1 INCIDENT → LOCATION
+            # ==========================================
+
+            incident_location_text = (
+                incident.get("location", {}).get("text")
+            )
+
+            if incident_location_text:
+                incident_location_text = (
+                    incident_location_text.strip()
+                )
+
+                for item in resolved_locations:
+
+                    location_name = (
+                        item["extracted_name"]
+                        .strip()
+                    )
+
+                    if (
+                        location_name.lower()
+                        not in incident_location_text.lower()
+                    ):
+                        continue
+
+                    location_entity = item["entity"]
+
+                    self.relationship_repository.create(
+                        from_type="INCIDENT",
+                        from_id=incident_id,
+                        to_type="LOCATION",
+                        to_id=location_entity["entity_id"],
+                        relationship_type="OCCURRED_AT",
+                        case_id=case_id,
+                        incident_id=incident_id,
+                        document_id=document_id,
+                        confidence=1.0,
+                        evidence=incident_location_text,
+                    )
+
+                    print(
+                        f"✓ Incident location relationship persisted: "
+                        f"INCIDENT/{incident_id} "
+                        f"OCCURRED_AT → "
+                        f"LOCATION/{location_entity['entity_id']}"
+                    )
+
+                    break
 
             # ==========================================
             # 5D. RELATIONSHIPS

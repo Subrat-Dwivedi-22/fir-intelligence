@@ -842,362 +842,869 @@ should be preserved as source-supported offence information.
 Do not invent legal sections.
 
 ============================================================
-19. RELATIONSHIPS
+19. RELATIONSHIPS — COMPREHENSIVE GRAPH EXTRACTION
 ============================================================
 
-Extract relationships ONLY when supported by explicit language.
+The criminal-network graph depends on extracting ALL meaningful,
+source-supported relationships.
+
+Do NOT extract only the most important relationship.
+
+For EVERY paragraph, sentence, event, transaction, communication record,
+organizational statement, ownership statement, location statement,
+vehicle statement, or evidence statement:
+
+1. Identify all entities involved.
+2. Identify every distinct relationship explicitly supported by the text.
+3. Extract each relationship as a SEPARATE relationship object.
+4. Preserve direction.
+5. Preserve the actual grammatical participants.
+6. Preserve useful temporal and transactional details in the relationship
+   metadata where supported.
+7. Preserve the exact source evidence supporting the relationship.
+
+The objective is COMPLETE SOURCE-SUPPORTED RELATIONSHIP COVERAGE.
+
+Do NOT stop after extracting one relationship from a sentence when the
+sentence clearly establishes multiple independent relationships.
+
+
+============================================================
+19.1 CANONICAL RELATIONSHIP TYPES
+============================================================
+
+Use these canonical predicates when the source supports them:
+
+OWNERSHIP / CONTROL
+- OWNS
+- CONTROLS
+- BENEFICIAL_OWNER_OF
+- REGISTERED_TO
+
+IDENTITY / CONTACT
+- HAS_PHONE
+- HAS_ACCOUNT
+- HAS_VEHICLE
+
+ORGANIZATIONAL
+- WORKS_FOR
+- OPERATES
+
+COMMUNICATION
+- CALLED
+- CONTACTED
+
+FINANCIAL
+- TRANSFERRED_FUNDS_TO
+- RECEIVED_FUNDS_FROM
+- PAID
+- WITHDREW_FROM
+
+OPERATIONAL
+- POSSESSED
+- USED
+- DELIVERED_TO
+- INTRODUCED_TO
+- THREATENED
+- ARRANGED_MEETING_WITH
+- COLLUDED_WITH
+
+SPATIAL / EVENT
+- LOCATED_AT
+- OCCURRED_AT
+- PARTICIPATED_IN
+- WITNESS_TO
+- LOCATED_WITH
+
+GENERAL
+- ASSOCIATED_WITH
+
+
+Do NOT invent predicate names.
+
+Normalize equivalent wording to the canonical predicate.
 
 Examples:
 
-"Sameer transferred funds to Apex Global Trading Ltd."
+"owned" → OWNS
+"controlled" → CONTROLS
+"director of" → CONTROLS or the most precise supported organizational
+relationship
+"works at" → WORKS_FOR
+"employee of" → WORKS_FOR
+"called" → CALLED
+"phoned" → CALLED
+"contacted" → CONTACTED
+"transferred Rs. 5 lakh to" → TRANSFERRED_FUNDS_TO
+"paid Rs. 5 lakh to" → PAID
+"received money from" → RECEIVED_FUNDS_FROM
+"withdrew cash from" → WITHDREW_FROM
+"used the vehicle" → USED
+"registered in the name of" → REGISTERED_TO
+"located at" → LOCATED_AT
+"was present at" → LOCATED_AT only when the wording establishes
+the person's presence at that location
+"witnessed" → WITNESS_TO when the witness-to-event relationship
+is explicitly stated
+
+
+============================================================
+19.2 EXTRACT RELATIONSHIPS ACROSS ALL NODE TYPES
+============================================================
+
+Relationships are NOT limited to PERSON → PERSON.
+
+The subject and object may be:
+
+PERSON
+ORGANIZATION
+PHONE
+VEHICLE
+ACCOUNT
+LOCATION
+INCIDENT
+UNKNOWN
+or another explicitly extracted supported entity type.
+
+Examples:
+
+PERSON → HAS_PHONE → PHONE
+
+PERSON → HAS_ACCOUNT → ACCOUNT
+
+PERSON → HAS_VEHICLE → VEHICLE
+
+PERSON → WORKS_FOR → ORGANIZATION
+
+PERSON → OWNS → ORGANIZATION
+
+PERSON → CONTROLS → ORGANIZATION
+
+ORGANIZATION → HAS_ACCOUNT → ACCOUNT
+
+PERSON → USED → VEHICLE
+
+VEHICLE → REGISTERED_TO → PERSON
+
+VEHICLE → REGISTERED_TO → ORGANIZATION
+
+PERSON → LOCATED_AT → LOCATION
+
+VEHICLE → LOCATED_AT → LOCATION
+
+INCIDENT → OCCURRED_AT → LOCATION
+
+PERSON → PARTICIPATED_IN → INCIDENT
+
+PERSON → WITNESS_TO → INCIDENT
+
+PHONE → CALLED → PHONE
+
+PERSON → CALLED → PERSON
+
+ACCOUNT → TRANSFERRED_FUNDS_TO → ACCOUNT
+
+ACCOUNT → TRANSFERRED_FUNDS_TO → ORGANIZATION
+
+PERSON → PAID → PERSON
+
+ACCOUNT → RECEIVED_FUNDS_FROM → PERSON
+
+
+Only create these relationships when the source supports them.
+
+
+============================================================
+19.3 EXTRACT ALL RELATIONSHIPS FROM A SINGLE SENTENCE/EVENT
+============================================================
+
+A single sentence can establish multiple relationships.
+
+Example:
+
+"Vinod called Sandeep six times, met him at Sheikh Auto Works,
+and handed him Rs. 5,00,000."
+
+Extract separate relationships:
+
+Vinod → CALLED → Sandeep
+
+Vinod → ARRANGED_MEETING_WITH → Sandeep
+OR another canonical meeting predicate only when actually supported
+
+Vinod → PAID → Sandeep
+
+Do NOT collapse all three facts into one relationship.
+
+Another example:
+
+"Sandeep used the black Scorpio to follow Vikram to Wadgaon Road."
+
+Extract:
+
+Sandeep → USED → black Scorpio
+
+Sandeep → LOCATED_AT → Wadgaon Road
+
+Sandeep → [explicitly stated action toward Vikram]
+
+Do NOT omit the vehicle or location merely because the main action
+is between two people.
+
+Another example:
+
+"Deshmukh Infra Ventures transferred Rs. 42 lakh from its ICICI account
+to Trimurti Land Holdings LLP's Bank of Maharashtra account."
+
+Extract the relevant entity/account relationships and financial
+relationship supported by the text.
+
+Preserve the amount and accounts in metadata where possible.
+
+
+============================================================
+19.4 STRUCTURED FACT RELATIONSHIPS
+============================================================
+
+When the source explicitly states a factual association, represent it
+as a relationship even when the statement is not phrased as a conventional
+relationship verb.
+
+Examples:
+
+"The registered mobile number of Ashok Deshmukh is +91..."
+→
+
+Ashok Deshmukh → HAS_PHONE → +91...
+
+"The Scorpio is registered to Sheikh Auto Works."
+→
+
+Scorpio → REGISTERED_TO → Sheikh Auto Works
+
+"Mahesh Oswal is proprietor of Oswal Bullion & Forex."
+→
+
+Mahesh Oswal → OWNS → Oswal Bullion & Forex
+
+"Sunita Deshmukh is a nominee director of Trimurti Land Holdings LLP."
+→
+
+Sunita Deshmukh → CONTROLS → Trimurti Land Holdings LLP
+
+Use the most semantically appropriate canonical relationship.
+
+Do NOT create a relationship merely because two objects happen to appear
+near each other.
+
+
+============================================================
+19.5 COMMUNICATION RELATIONSHIPS
+============================================================
+
+When communication details are present, extract them.
+
+Examples:
+
+"Phone A called Phone B 14 times."
+→
+
+Phone A → CALLED → Phone B
+
+Metadata should preserve, where available:
+
+{{
+  "call_count": 14,
+  "date": "..."
+}}
+
+"Vinod called Sandeep."
+→
+
+Vinod → CALLED → Sandeep
+
+If both person and phone identities are explicitly provided, extract the
+phone-level relationship when supported and preserve the person/phone
+association separately.
+
+Do NOT invent call counts, dates, times, or device identifiers.
+
+
+============================================================
+19.6 FINANCIAL RELATIONSHIPS
+============================================================
+
+Financial information should produce explicit transaction relationships
+when the participants are identifiable.
+
+Example:
+
+"Account A transferred Rs. 25,00,000 to Account B."
 
 →
 
-subject = "Sameer"
+Account A → TRANSFERRED_FUNDS_TO → Account B
 
-subject_type = "PERSON"
+Include metadata when available:
 
-predicate = "TRANSFERRED_FUNDS_TO"
+{{
+  "amount": 2500000,
+  "currency": "INR",
+  "date": "...",
+  "transaction_type": "TRANSFER"
+}}
 
-object = "Apex Global Trading Ltd"
+Example:
 
-object_type = "ORGANIZATION"
+"Mahesh handed Rs. 5 lakh in cash to Vinod."
+
+→
+
+Mahesh → PAID → Vinod
+
+metadata:
+
+{{
+  "amount": 500000,
+  "currency": "INR"
+}}
+
+Do NOT invent transaction endpoints from contextual proximity.
+
+If the amount is known but the sender or receiver is not known,
+extract the monetary amount but do NOT fabricate a relationship.
+
+
+============================================================
+19.7 VEHICLE RELATIONSHIPS
+============================================================
+
+When a document states who owns, uses, operates, drives, or is associated
+with a vehicle, extract the corresponding relationship.
+
+Examples:
+
+"Iqbal Sheikh provided the Scorpio."
+→
+Iqbal Sheikh → USED → Scorpio
+only if the wording supports use/provision in the relevant semantic context.
+
+"The Scorpio was registered in Sheikh Auto Works' name."
+→
+Scorpio → REGISTERED_TO → Sheikh Auto Works
+
+"Sandeep was driving the Scorpio."
+→
+Sandeep → USED → Scorpio
+
+"ANPR placed the Scorpio at Wadgaon Road."
+→
+Scorpio → LOCATED_AT → Wadgaon Road
+
+Do not infer ownership from use.
+
+
+============================================================
+19.8 ORGANIZATION RELATIONSHIPS
+============================================================
+
+Extract explicit organizational relationships.
+
+Examples:
+
+"Ashok Deshmukh is Chairman of Deshmukh Infra Ventures."
+→
+Ashok Deshmukh → CONTROLS → Deshmukh Infra Ventures
+
+"Sunita is nominee director of Trimurti Land Holdings LLP."
+→
+Sunita → CONTROLS → Trimurti Land Holdings LLP
+
+"Kunal Mehta was an accountant at Deshmukh Infra Ventures."
+→
+Kunal Mehta → WORKS_FOR → Deshmukh Infra Ventures
+
+Do not create organizational relationships from shared addresses,
+shared documents, or simple co-occurrence.
+
+
+============================================================
+19.9 LOCATION RELATIONSHIPS
+============================================================
+
+Extract location connections whenever explicitly supported.
+
+Examples:
+
+"The meeting occurred at Chawla Associates."
+→
+Meeting/Incident → OCCURRED_AT → Chawla Associates
+
+"Sandeep was seen at Wadgaon Road."
+→
+Sandeep → LOCATED_AT → Wadgaon Road
+
+"The Scorpio was found near the crime scene."
+→
+Scorpio → LOCATED_AT → Crime Scene
+
+Preserve time/date when explicitly present.
+
+Do NOT convert a person's home address into an event/location relationship
+unless the source context establishes that semantic fact.
+
+
+============================================================
+19.10 INCIDENT / EVENT PARTICIPATION
+============================================================
+
+When an incident/event explicitly identifies participants, extract
+participant relationships.
+
+Example:
+
+"Sandeep, Prashant and Vinod participated in the planning meeting."
+
+Extract separate relationships:
+
+Sandeep → PARTICIPATED_IN → Incident/Event
+
+Prashant → PARTICIPATED_IN → Incident/Event
+
+Vinod → PARTICIPATED_IN → Incident/Event
+
+If somebody is explicitly described as a witness:
+
+Person → WITNESS_TO → Incident
+
+If the event location is explicitly stated:
+
+Incident/Event → OCCURRED_AT → Location
+
+
+============================================================
+19.11 INTRODUCTION RELATIONSHIPS
+============================================================
+
+For:
+
+"Person A introduced Person B to Person C."
+
+The actual grammatical introducer is Person A.
+
+Use:
+
+Person A → INTRODUCED_TO → Person B
+
+unless the sentence semantics clearly establish another target.
+
+Do not automatically use Person C as the target.
+
+Preserve the full sentence as evidence.
+
+Do not create unrelated additional relationships for Person C.
+
+
+============================================================
+19.12 UNKNOWN / UNIDENTIFIED ENDPOINTS
+============================================================
+
+If a relationship explicitly refers to an unknown or unidentified entity,
+preserve the endpoint as UNKNOWN.
 
 Example:
 
 "Agent Blue delivered cash to Sameer."
 
-→
+If Agent Blue is explicitly unknown:
 
-subject = "Agent Blue"
+Agent Blue → DELIVERED_TO → Sameer
 
-subject_type = "UNKNOWN"
+subject_type = UNKNOWN
 
-predicate = "DELIVERED_TO"
+Do NOT convert an unknown person into PERSON merely because they behave
+like a person.
 
-object = "Sameer"
+Do not invent a name or identity.
 
-object_type = "PERSON"
 
-Example:
+============================================================
+19.13 RELATIONSHIP COMPLETENESS
+============================================================
 
-"Rakesh threatened the complainant."
+Before finishing extraction, perform a relationship-completeness pass.
 
-→
+Review the ENTIRE document again and identify every distinct
+source-supported relationship.
 
-subject = "Rakesh"
+Ask:
 
-subject_type = "PERSON"
+1. Did I capture every explicit person-person relationship?
+2. Did I capture person-organization relationships?
+3. Did I capture person-phone relationships?
+4. Did I capture phone-phone communication relationships?
+5. Did I capture person-vehicle relationships?
+6. Did I capture vehicle-organization relationships?
+7. Did I capture vehicle-location relationships?
+8. Did I capture person-location relationships?
+9. Did I capture organization-location relationships?
+10. Did I capture organization-account relationships?
+11. Did I capture account-account financial relationships?
+12. Did I capture financial relationships between
+    people, accounts, and organizations?
+13. Did I capture incident participation?
+14. Did I capture incident locations?
+15. Did I capture event/location relationships?
+16. Did I capture event/person relationships?
+17. Did I capture every distinct relationship in
+    multi-action sentences?
+18. Did I preserve relationships across different
+    sections of the document?
+19. Did I preserve the MOST SPECIFIC predicate supported
+    by the source?
+20. Did I accidentally downgrade a specific relationship
+    to ASSOCIATED_WITH?
+21. Did I capture relationships whose endpoints are phones,
+    vehicles, accounts, organizations, locations, or events?
+22. Did I avoid creating unsupported relationships?
 
-predicate = "THREATENED"
+The objective is MAXIMUM SOURCE-SUPPORTED RELATIONSHIP COVERAGE,
+not minimum relationship count.
 
-object = "complainant"
+============================================================
+19.13.1 SPECIFIC RELATIONSHIP PRESERVATION
+============================================================
 
-object_type = "PERSON"
+Always prefer the most specific predicate explicitly supported
+by the source.
 
-Use ONLY the following canonical predicates:
+Examples:
 
-OWNS
-CONTROLS
-TRANSFERRED_FUNDS_TO
-PAID
-POSSESSED
-USED
-DELIVERED_TO
-INTRODUCED_TO
-THREATENED
-ARRANGED_MEETING_WITH
-COLLUDED_WITH
+"Prashant followed Vikram."
+→ FOLLOWED
+
+"Prashant tracked Vikram."
+→ FOLLOWED
+
+"Prashant shadowed Vikram."
+→ FOLLOWED
+
+Do NOT reduce these to:
+
 ASSOCIATED_WITH
-LOCATED_AT
 
-Do NOT invent, abbreviate, or modify predicate names.
+when the source supports FOLLOWED.
 
-For example:
-"paid" → PAID
-"paid money to" → PAID
-"transferred funds to" → TRANSFERRED_FUNDS_TO
-"introduced" → INTRODUCED_TO
-"arranged a meeting with" → ARRANGED_MEETING_WITH
+Similarly:
 
-INTRODUCTION RELATIONSHIPS
+"X owns Y"
+→ OWNS
 
-For introduction statements, preserve the actual participants in the
-introduction.
+"X controls Y"
+→ CONTROLS
 
-When the text has the form:
+"X works for Y"
+→ WORKS_FOR
 
-"Person A introduced Person B to Person C."
+"X called Y"
+→ CALLED
 
-interpret the relationship as:
+"X transferred funds to Y"
+→ TRANSFERRED_FUNDS_TO
 
-subject = Person A
-predicate = INTRODUCED_TO
-object = Person B
+"X paid Y"
+→ PAID
 
-The evidence should preserve the full sentence.
+"X used vehicle Y"
+→ USED
 
-Do not use Person C as the object merely because Person C appears after "to".
+"X was located at Y"
+→ LOCATED_AT
+
+Do NOT replace a specific source-supported predicate with
+ASSOCIATED_WITH merely because ASSOCIATED_WITH is broader.
+
+ASSOCIATED_WITH should be used only when the source supports
+an association but does not support a more specific predicate.
+
+============================================================
+19.13.2 PHONE RELATIONSHIP ENDPOINTS
+============================================================
+
+When the source explicitly refers to telephone numbers,
+prefer phone endpoints over person endpoints when the
+corresponding numbers are identifiable.
 
 Example:
 
-"Amit Sharma introduced Rajesh Kumar to Priya Mehta."
+"Ashok's number called Vinod's number 14 times."
 
-→
+If Ashok's and Vinod's phone numbers are identifiable from
+the document, extract:
 
-subject = "Amit Sharma"
-subject_type = "PERSON"
-predicate = "INTRODUCED_TO"
-object = "Rajesh Kumar"
-object_type = "PERSON"
+AshokPhone --CALLED--> VinodPhone
 
-If the sentence instead clearly states:
+Do NOT replace this with:
 
-"Amit Sharma introduced Rajesh Kumar to Priya Mehta at the meeting."
+Ashok --CALLED--> Vinod
 
-the relationship remains:
-
-Amit Sharma INTRODUCED_TO Rajesh Kumar
-
-Do not create a separate relationship to Priya Mehta unless the document
-explicitly establishes another relationship involving Priya Mehta.
-
-
-RELATIONSHIP ARGUMENT ACCURACY
-
-Extract relationships from the actual grammatical and semantic meaning of the
-source text.
-
-The subject and object must be the entities that actually participate in the
-stated relationship.
-
-Do not replace a person mentioned in the evidence with an organization merely
-because the organization is mentioned nearby.
-
-For example:
-
-"Arjun introduced Neha to the company representative."
-
-This does NOT establish:
-Arjun INTRODUCED_TO Sunrise Property Ventures
-
-unless the document explicitly states that Sunrise Property Ventures is the
-entity/person being introduced to.
-
-The correct interpretation may involve:
-Arjun INTRODUCED_TO Neha
-or another relationship involving the company representative, depending on
-the exact schema and available entities.
-
-Never use an organization as a relationship endpoint merely because an
-organization appears in the surrounding sentence.
-
-When the actual endpoint is described indirectly (for example, "the company
-representative", "his associate", "the driver", "the manager"), preserve the
-relationship only if the endpoint can be safely resolved from the document.
-Otherwise do not invent an endpoint.
-
-============================================================
-ENTITY EXTRACTION CONFIDENCE
-============================================================
-
-For every extracted person, organization, location, and vehicle,
-provide a confidence value from 0.0 to 1.0.
-
-Confidence represents how strongly the document supports BOTH:
-
-1. The existence/identity of the extracted entity.
-2. The entity's documented relevance or involvement in the information
-   being extracted.
-
-Confidence is NOT a measure of criminal guilt, legal culpability,
-or whether the entity is a suspect.
-
-A witness, victim, complainant, police officer, family member, or
-other non-suspect can still have high confidence when the document
-clearly identifies them.
-
-Use the following scale carefully:
-
-0.95-1.00:
-The entity is explicitly identified and directly involved in a
-clearly documented event, action, transaction, or relationship.
-
-Examples:
-- "Rajesh Kumar paid ₹5,00,000 to ABC Ltd."
-- "Priya Mehta was arrested at the location."
-- "Vehicle DL01AB1234 was used in the incident."
-
-0.90-0.94:
-The entity is explicitly identified with strong supporting details,
-but its involvement is somewhat less direct than the primary
-participants.
-
-Examples:
-- A clearly identified person who arranged or facilitated an event.
-- An organization explicitly identified as connected to a transaction.
-- A clearly identified vehicle associated with the incident.
-
-0.80-0.89:
-The entity is clearly identified and relevant to the investigation,
-but is primarily associated with or indirectly connected to the
-main event.
-
-Examples:
-- An associate of an accused.
-- An employee of an involved organization.
-- A person who facilitated contact but did not participate directly.
-
-0.65-0.79:
-The entity is clearly mentioned and has a secondary or peripheral
-connection.
-
-Examples:
-- A relative.
-- A friend or acquaintance.
-- A witness with limited involvement.
-- An intermediary whose exact role is not central to the event.
-
-0.45-0.64:
-The entity is mentioned or partially identified, but the document
-provides limited evidence about its relevance or connection.
-
-0.20-0.44:
-The entity is weakly implied, ambiguously identified, or supported
-only by limited contextual evidence.
-
-0.00-0.19:
-The entity is highly speculative or insufficiently supported.
-Do NOT create an entity merely because it seems plausible.
-
-IMPORTANT:
-
-Do not assign 1.0 merely because an entity's name appears explicitly.
-
-Consider the entity's documented role, supporting details, and degree
-of involvement when selecting the confidence value.
-
-Do not automatically give every explicitly named entity the same
-confidence.
-
-Do not use confidence to indicate whether two mentions refer to the
-same real-world entity. Entity resolution is handled separately by
-the application.
-
-Do not use confidence to indicate guilt, suspicion, or legal liability.
-
-Confidence must reflect the evidence present in the source document,
-not assumptions or outside knowledge.
-
-============================================================
-RELATIONSHIP EXTRACTION CONFIDENCE
-============================================================
-
-For every extracted relationship, provide a confidence value from
-0.0 to 1.0.
-
-Confidence represents how strongly the source document supports the
-specific relationship between the subject and object.
-
-Do NOT assign confidence based merely on the fact that both entities
-appear in the same document.
-
-Use the following scale:
-
-0.95-1.00:
-The relationship is directly and explicitly stated in the document.
-
-Examples:
-"Rajesh Kumar transferred Rs. 25,00,000 to ABC Infrastructure Pvt Ltd."
-→ confidence should be approximately 0.95-1.00
-
-"Amit Sharma threatened Rajesh Kumar."
-→ confidence should be approximately 0.95-1.00
-
-0.90-0.94:
-The relationship is explicitly supported but requires minor
-interpretation or normalization.
-
-0.80-0.89:
-The relationship is strongly supported by the document but is
-indirect or involves a secondary role.
-
-0.65-0.79:
-The relationship is plausible and supported by contextual evidence,
-but is not directly stated.
-
-0.45-0.64:
-The relationship is ambiguous or supported only by limited evidence.
-
-0.20-0.44:
-The relationship is weakly implied.
-
-Below 0.20:
-The relationship is highly speculative.
-Do NOT extract the relationship merely because it seems plausible.
-
-IMPORTANT:
-
-Do not assign 1.0 to every explicitly stated relationship.
-
-Use the full range appropriately.
-
-Confidence measures the strength of evidence for THIS relationship,
-not the confidence that the entities themselves are correctly resolved.
-
-Do not use relationship confidence to indicate criminal guilt,
-legal liability, or suspicion.
-
-Do not infer a relationship solely from:
-- co-occurrence
-- shared addresses
-- shared organizations
-- being mentioned in the same incident
-- being relatives
-- being associates
-
-unless the document explicitly supports the relationship.
-
-Every relationship object MUST contain:
-subject
-subject_type
-predicate
-object
-object_type
-evidence
-confidence
-
-============================================================
-19A. UNKNOWN RELATIONSHIP ENDPOINTS
-============================================================
-
-If a relationship endpoint refers to an explicitly unknown,
-unidentified, anonymous, or provisional person, its object_type or
-subject_type MUST be UNKNOWN.
-
-Examples:
-
-"Agent Blue delivered cash to Sameer Khanna."
-
-If Agent Blue is explicitly described as an unknown accomplice:
-
-subject_type = "UNKNOWN"
-
-not:
-
-subject_type = "PERSON"
+unless the source only supports the person-level relationship.
 
 Likewise:
 
-"An unidentified foreign node received funds."
+"Vinod called Sandeep's burner number 6 times."
 
-object_type = "UNKNOWN"
+If Sandeep's burner number is identifiable, extract:
 
-Do not convert an unknown identity into PERSON merely because the
-entity behaves like a person.
+VinodPhone --CALLED--> SandeepPhone
 
-A named alias or codename does not automatically establish a legal
-identity.
+or the equivalent identifiable phone endpoint.
+
+Preserve:
+
+- call count
+- date
+- time/range
+- relevant source context
+
+when explicitly supported.
+
+============================================================
+19.13.3 EVENT AND LOCATION RELATIONSHIPS
+============================================================
+
+Preserve explicit relationships involving events or incidents.
+
+Example:
+
+"The planning meeting took place at Chawla Associates
+in Dharampeth."
+
+This may support:
+
+PLANNING_MEETING --OCCURRED_AT--> Chawla Associates
+
+and, when the source clearly establishes the location:
+
+Chawla Associates --LOCATED_AT--> Dharampeth
+
+Example:
+
+"The murder occurred near the Panchsheel Green City
+boundary wall."
+
+Extract:
+
+MURDER --OCCURRED_AT--> Panchsheel Green City boundary wall
+
+Do not omit event/location relationships simply because
+the event is represented in the incidents section.
+
+Events and incidents are valid relationship endpoints.
+
+============================================================
+19.13.4 MULTI-ACTION SENTENCES
+============================================================
+
+Extract each distinct relationship independently.
+
+Example:
+
+"Prashant followed Vikram and called Sandeep 11 times."
+
+This supports two relationships:
+
+Prashant --FOLLOWED--> Vikram
+Prashant --CALLED--> Sandeep
+
+Do not collapse them into one relationship.
+
+Likewise, if a sentence contains multiple transfers,
+communications, ownership facts, locations, or actions,
+extract each distinct source-supported relationship.
+
+============================================================
+19.13.5 RELATIONSHIP ENDPOINT PRIORITY
+============================================================
+
+Prefer the most precise identifiable endpoint.
+
+For communication:
+
+PHONE > PERSON
+
+when a phone number is explicitly identified.
+
+For financial transactions:
+
+ACCOUNT > ORGANIZATION/PERSON
+
+when the actual account is explicitly identified.
+
+For vehicles:
+
+VEHICLE > PERSON
+
+when the vehicle itself is the object of the action.
+
+For events:
+
+EVENT/INCIDENT > PERSON
+
+when the source explicitly relates a person to an event.
+
+Do not invent an endpoint merely to obtain a more specific edge.
+
+============================================================
+
+
+============================================================
+19.14 ANTI-HALLUCINATION RULE
+============================================================
+
+Do NOT manufacture relationships simply to make the graph dense.
+
+Never create a relationship solely because:
+
+- two entities appear in the same paragraph
+- two entities appear in the same document
+- two people are both accused
+- two people are at the same location
+- two people share an address
+- two people work for the same organization
+- two entities are mentioned together
+- two names look similar
+- one entity appears near another entity
+- a relationship would be plausible
+
+The source must provide an actual semantic or structured factual basis.
+
+However, do NOT be overly conservative when the source DOES explicitly
+contain the relationship.
+
+The correct behavior is:
+
+DO NOT INVENT.
+
+DO NOT OMIT.
+
+
+============================================================
+19.15 RELATIONSHIP EVIDENCE
+============================================================
+
+Every relationship must contain concise source-grounded evidence.
+
+Evidence must support the specific subject → predicate → object claim.
+
+Good:
+
+"14 calls were placed from Vinod's number to Sandeep's burner on 12/01."
+
+Bad:
+
+"Vinod and Sandeep were probably connected."
+
+Do not fabricate quotations.
+
+Preserve OCR uncertainty when necessary.
+
+
+============================================================
+19.16 RELATIONSHIP CONFIDENCE
+============================================================
+
+Every relationship MUST contain confidence from 0.0 to 1.0.
+
+Confidence measures how strongly the source supports THIS relationship.
+
+Use approximately:
+
+0.95–1.00
+Directly and explicitly stated.
+
+0.90–0.94
+Explicitly supported with minor normalization/interpretation.
+
+0.80–0.89
+Strongly supported but somewhat indirect or secondary.
+
+0.65–0.79
+Supported by contextual evidence, but not directly stated.
+
+0.45–0.64
+Ambiguous or weakly supported.
+
+0.20–0.44
+Weak implication.
+
+Below 0.20
+Highly speculative.
+
+DO NOT extract highly speculative relationships.
+
+Do not use confidence for:
+- guilt
+- criminal culpability
+- entity-resolution confidence
+
+
+============================================================
+19.17 RELATIONSHIP METADATA
+============================================================
+
+When the source supports additional relationship-level facts, preserve
+them in metadata.
+
+Possible metadata:
+
+{{
+  "amount": ...,
+  "currency": "...",
+  "call_count": ...,
+  "date": "...",
+  "time": "...",
+  "transaction_type": "...",
+  "source_context": "..."
+}}
+
+Only include metadata supported by the source.
+
+Do not invent metadata.
+
+
+============================================================
+19.18 FINAL RELATIONSHIP RULE
+============================================================
+
+The desired result is NOT:
+
+"few highly important relationships."
+
+The desired result is:
+
+"EVERY MEANINGFUL, SOURCE-SUPPORTED RELATIONSHIP IN THE DOCUMENT."
+
+A rich document should therefore produce a rich relationship graph.
+
+Do not artificially cap the number of relationships.
+
+Do not stop after extracting the first relationship involving an entity.
+
+Do not collapse distinct relationships merely because the same two entities
+are involved.
+
+Preserve distinct relationships when they differ by:
+
+- predicate
+- date
+- transaction
+- event
+- communication
+- evidence
+
+The final relationship list should represent the document's actual
+network structure as completely as the evidence allows.
 
 ============================================================
 20. NEVER INFER RELATIONSHIPS

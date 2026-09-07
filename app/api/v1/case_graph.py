@@ -10,6 +10,7 @@ router = APIRouter(
     tags=["Case Graph"],
 )
 
+
 @router.get(
     "/{case_id}/graph",
     response_model=CaseGraphResponse,
@@ -113,6 +114,7 @@ def get_case_graph(case_id: str):
                 "entity_id": 1,
                 "type": 1,
                 "value": 1,
+                "confidence": 1,
             },
         )
     )
@@ -143,6 +145,10 @@ def get_case_graph(case_id: str):
 
     nodes = []
 
+    # ------------------------------------------
+    # PERSON NODES
+    # ------------------------------------------
+
     for person in persons:
         nodes.append({
             "id": person["person_id"],
@@ -152,6 +158,10 @@ def get_case_graph(case_id: str):
             "confidence": person.get("extraction_confidence"),
         })
 
+    # ------------------------------------------
+    # UNKNOWN IDENTITY NODES
+    # ------------------------------------------
+
     for unknown in unknowns:
         nodes.append({
             "id": unknown["unknown_id"],
@@ -159,6 +169,10 @@ def get_case_graph(case_id: str):
             "label": unknown.get("label") or unknown["unknown_id"],
             "roles": unknown.get("roles", []),
         })
+
+    # ------------------------------------------
+    # INCIDENT NODES
+    # ------------------------------------------
 
     for incident in incidents:
         nodes.append({
@@ -168,6 +182,10 @@ def get_case_graph(case_id: str):
             "roles": [],
         })
 
+    # ------------------------------------------
+    # ENTITY NODES
+    # ------------------------------------------
+
     for entity in entities:
         nodes.append({
             "id": entity["entity_id"],
@@ -175,7 +193,12 @@ def get_case_graph(case_id: str):
             "entity_type": entity.get("type"),
             "label": entity.get("value") or entity.get("type") or "Entity",
             "roles": [],
+            "confidence": entity.get("confidence"),
         })
+
+    # ==========================================
+    # GRAPH EDGES
+    # ==========================================
 
     edges = []
 
@@ -189,6 +212,10 @@ def get_case_graph(case_id: str):
             "confidence": relationship.get("confidence"),
             "weight": relationship.get("weight", 0.50),
         })
+
+    # ==========================================
+    # RESPONSE
+    # ==========================================
 
     return serialize_mongo({
         "case_id": case_id,
