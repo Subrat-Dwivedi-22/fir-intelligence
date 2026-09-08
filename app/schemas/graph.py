@@ -150,11 +150,27 @@ class GraphEdge(BaseModel):
 # ============================================================
 
 
+class HiddenLinkEntity(BaseModel):
+    type: str
+    id: str
+    reference_id: str | None = None
+
+
+class HiddenLinkEdge(BaseModel):
+    relationship_id: str
+    reference_id: str | None = None
+    source: str
+    target: str
+    source_type: str
+    target_type: str
+    type: str
+
+
 class HiddenLinkFinding(BaseModel):
     id: str
     title: str
-    entities: list[str] = Field(default_factory=list)
-    edges: list[str] = Field(default_factory=list)
+    entities: list[HiddenLinkEntity] = Field(default_factory=list)
+    edges: list[HiddenLinkEdge] = Field(default_factory=list)
     confidence: float = 0.0
     rationale: str = ""
     severity: str = "medium"
