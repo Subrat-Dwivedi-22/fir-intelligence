@@ -825,11 +825,23 @@ def get_case_graph(case_id: str):
 
     for finding in hidden_link_findings:
 
+        entities = [
+            entity.get("id")
+            for entity in finding.get("entities", [])
+            if entity.get("id")
+        ]
+
+        edges = [
+            edge.get("relationship_id")
+            for edge in finding.get("edges", [])
+            if edge.get("relationship_id")
+        ]
+
         hidden_links.append({
             "id": finding.get("hidden_link_id"),
             "title": finding.get("title"),
-            "entities": finding.get("entities", []),
-            "edges": finding.get("edges", []),
+            "entities": entities,
+            "edges": edges,
             "confidence": finding.get("confidence"),
             "rationale": finding.get("rationale"),
             "severity": finding.get("severity"),
