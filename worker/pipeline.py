@@ -512,6 +512,10 @@ class FIRPipeline:
                 ):
                     continue
 
+                org_meta = {}
+                if organization.organization_type:
+                    org_meta["organization_type"] = organization.organization_type
+
                 entity = (
                     self.entity_resolver.resolve(
                         entity_type="ORGANIZATION",
@@ -519,6 +523,7 @@ class FIRPipeline:
                         case_id=case_id,
                         document_id=document_id,
                         confidence=organization.confidence,
+                        metadata=org_meta if org_meta else None,
                     )
                 )
 
@@ -546,6 +551,12 @@ class FIRPipeline:
                 ):
                     continue
 
+                loc_meta = {}
+                if location.location_type:
+                    loc_meta["location_type"] = location.location_type
+                if location.address:
+                    loc_meta["address"] = location.address
+
                 entity = (
                     self.entity_resolver.resolve(
                         entity_type="LOCATION",
@@ -553,6 +564,7 @@ class FIRPipeline:
                         case_id=case_id,
                         document_id=document_id,
                         confidence=location.confidence,
+                        metadata=loc_meta if loc_meta else None,
                     )
                 )
 
@@ -593,6 +605,14 @@ class FIRPipeline:
                 ):
                     continue
 
+                veh_meta = {}
+                if vehicle.registration_number:
+                    veh_meta["registration_number"] = vehicle.registration_number
+                if vehicle.vehicle_type:
+                    veh_meta["vehicle_type"] = vehicle.vehicle_type
+                if vehicle.description:
+                    veh_meta["description"] = vehicle.description
+
                 entity = (
                     self.entity_resolver.resolve(
                         entity_type="VEHICLE",
@@ -600,6 +620,7 @@ class FIRPipeline:
                         case_id=case_id,
                         document_id=document_id,
                         confidence=vehicle.confidence,
+                        metadata=veh_meta if veh_meta else None,
                     )
                 )
 
@@ -905,6 +926,41 @@ class FIRPipeline:
                     continue
 
                 # --------------------------------------
+                # Build metadata from candidate
+                # --------------------------------------
+
+                rel_metadata = {}
+
+                if hasattr(candidate, "metadata") and candidate.metadata:
+                    md = candidate.metadata
+                    if hasattr(md, "amount") and md.amount is not None:
+                        rel_metadata["amount"] = md.amount
+                    if hasattr(md, "currency") and md.currency:
+                        rel_metadata["currency"] = md.currency
+                    if hasattr(md, "call_count") and md.call_count is not None:
+                        rel_metadata["call_count"] = md.call_count
+                    if hasattr(md, "transaction_type") and md.transaction_type:
+                        rel_metadata["transaction_type"] = md.transaction_type
+                    if hasattr(md, "date") and md.date:
+                        rel_metadata["date"] = md.date
+                    if hasattr(md, "time") and md.time:
+                        rel_metadata["time"] = md.time
+                    if hasattr(md, "account_reference") and md.account_reference:
+                        rel_metadata["account_reference"] = md.account_reference
+
+                # Also capture top-level date/time
+                if not rel_metadata.get("date") and candidate.date:
+                    rel_metadata["date"] = candidate.date
+                if not rel_metadata.get("time") and candidate.time:
+                    rel_metadata["time"] = candidate.time
+
+                rel_derivation = (
+                    resolved_relationship.get("derivation")
+                    or getattr(candidate, "derivation", "DIRECT")
+                    or "DIRECT"
+                )
+
+                # --------------------------------------
                 # Persist relationship
                 # --------------------------------------
 
@@ -945,6 +1001,8 @@ class FIRPipeline:
                                 "evidence"
                             ]
                         ),
+                        derivation=rel_derivation,
+                        metadata=rel_metadata if rel_metadata else None,
                     )
                 )
 

@@ -45,6 +45,7 @@ class EntityResolver:
         document_id: str | None = None,
         pages: list[int] | None = None,
         confidence: float | None = None,
+        metadata: dict | None = None,
     ) -> dict:
 
         if not value or not value.strip():
@@ -74,4 +75,5 @@ class EntityResolver:
             document_id=document_id,
             pages=pages,
             confidence=confidence,
+            metadata=metadata,
         )

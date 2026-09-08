@@ -22,6 +22,8 @@ class RelationshipRepository:
         pages: list[int] | None = None,
         confidence: float | None = None,
         evidence: str | None = None,
+        derivation: str = "DIRECT",
+        metadata: dict | None = None,
     ) -> dict:
 
         now = datetime.now(timezone.utc)
@@ -73,6 +75,13 @@ class RelationshipRepository:
             if pages:
                 update["source.pages"] = pages
 
+            if derivation:
+                update["derivation"] = derivation
+
+            if metadata:
+                for mk, mv in metadata.items():
+                    update[f"metadata.{mk}"] = mv
+
             db.relationships.update_one(
                 query,
                 {
@@ -102,6 +111,8 @@ class RelationshipRepository:
             confidence=confidence,
             evidence=evidence,
             weight=relationship_weight(relationship_type),
+            derivation=derivation,
+            metadata=metadata,
         )
 
         db.relationships.insert_one(
@@ -134,6 +145,7 @@ class RelationshipRepository:
                 },
             )
         )
+
 
     def get_by_incident(
         self,

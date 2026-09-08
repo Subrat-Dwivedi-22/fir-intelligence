@@ -45,6 +45,7 @@ class EntityRepository:
         document_id: str | None = None,
         pages: list[int] | None = None,
         confidence: float | None = None,
+        metadata: dict | None = None,
     ) -> dict:
 
         existing = self.find_by_normalized_value(
@@ -56,6 +57,21 @@ class EntityRepository:
 
             if case_id:
 
+                update_fields = {
+                    "updated_at": datetime.now(
+                        timezone.utc
+                    ),
+                }
+
+                if confidence is not None:
+                    update_fields["confidence"] = confidence
+
+                # Merge metadata without overwriting existing keys
+                if metadata:
+                    for mk, mv in metadata.items():
+                        if mv is not None:
+                            update_fields[f"metadata.{mk}"] = mv
+
                 db.entities.update_one(
                     {
                         "entity_id": existing[
@@ -66,12 +82,7 @@ class EntityRepository:
                         "$addToSet": {
                             "case_ids": case_id,
                         },
-                        "$set": {
-                            "updated_at": datetime.now(
-                                timezone.utc
-                            ),
-                            **({"confidence": confidence} if confidence is not None else {}),
-                        },
+                        "$set": update_fields,
                     },
                 )
 
@@ -88,6 +99,11 @@ class EntityRepository:
                     )
                 )
 
+                if metadata:
+                    existing_meta = existing.get("metadata", {})
+                    existing_meta.update(metadata)
+                    existing["metadata"] = existing_meta
+
             return existing
 
         document = create_entity_document(
@@ -98,6 +114,7 @@ class EntityRepository:
             document_id=document_id,
             pages=pages,
             confidence=confidence,
+            metadata=metadata,
         )
 
         db.entities.insert_one(

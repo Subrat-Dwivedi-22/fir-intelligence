@@ -10,6 +10,7 @@ def create_entity_document(
     document_id: str | None = None,
     pages: list[int] | None = None,
     confidence: float | None = None,
+    metadata: dict | None = None,
 ):
     now = datetime.now(timezone.utc)
 
@@ -34,6 +35,8 @@ def create_entity_document(
             "document_id": document_id,
             "pages": pages or [],
         },
+
+        "metadata": metadata or {},
 
         "created_at": now,
         "updated_at": now,
