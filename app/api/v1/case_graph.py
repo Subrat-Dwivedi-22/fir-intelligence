@@ -831,7 +831,7 @@ def get_case_graph(case_id: str):
             if entity.get("id")
         ]
 
-        hidden_edge_ids = [git 
+        hidden_edge_ids = [
             edge.get("relationship_id")
             for edge in finding.get("edges", [])
             if edge.get("relationship_id")
