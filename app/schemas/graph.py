@@ -104,7 +104,7 @@ class GraphNode(BaseModel):
     gender: str | None = None
     contact: str | None = None
     occupation: str | None = None
-    address: str | None = None
+    address: str | dict | None = None
     personRole: str | None = None  # PersonRole
 
     # ---- Case context --------------------------------------
