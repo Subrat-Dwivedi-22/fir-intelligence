@@ -449,6 +449,13 @@ def get_case_graph(case_id: str):
         )
     )
 
+    hidden_link_findings = list(
+        db.hidden_link_findings.find(
+            {"case_id": case_id},
+            {"_id": 0},
+        )
+    )
+
     # ==========================================
     # BUILD NODE INDEX
     # ==========================================
@@ -811,6 +818,24 @@ def get_case_graph(case_id: str):
     )
 
     # ==========================================
+    # BUILD HIDDEN LINK FINDINGS
+    # ==========================================
+
+    hidden_links = []
+
+    for finding in hidden_link_findings:
+
+        hidden_links.append({
+            "id": finding.get("hidden_link_id"),
+            "title": finding.get("title"),
+            "entities": finding.get("entities", []),
+            "edges": finding.get("edges", []),
+            "confidence": finding.get("confidence"),
+            "rationale": finding.get("rationale"),
+            "severity": finding.get("severity"),
+        })
+
+    # ==========================================
     # RESPONSE
     # ==========================================
 
@@ -818,5 +843,5 @@ def get_case_graph(case_id: str):
         "meta": meta,
         "nodes": nodes,
         "edges": edges,
-        "hiddenLinks": [],
+        "hiddenLinks": hidden_links,
     })
